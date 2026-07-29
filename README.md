@@ -184,8 +184,3 @@ For the local SQLite launcher, the backend creates tables from SQLAlchemy models
 - The archived Next.js prototype remains in `frontend/` for comparison and can be removed later if the team wants a smaller public repo.
 - There is not yet an automated test suite; current validation is build and compile checks.
 
-## GitHub and Hosting Notes
-
-GitHub is a good place to share the source code. To let other people view the running app in a browser, this full-stack app needs a host that can run .NET, Python, and a database. GitHub Pages alone cannot host this app because Blazor Server and FastAPI require server processes.
-
-Reasonable hosting options include Azure App Service / Container Apps, Render, Railway, Fly.io, or another Docker-capable environment.
