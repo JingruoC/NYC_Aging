@@ -1,0 +1,35 @@
+# OS and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/.venv/
+backend/local.db
+*.db
+*.sqlite
+*.sqlite3
+
+# .NET
+bin/
+obj/
+blazor-ui/bin/
+blazor-ui/obj/
+
+# Node / legacy frontend
+node_modules/
+dist/
+.next/
+frontend/.next/
+frontend/node_modules/
+
+# Logs
+*.log

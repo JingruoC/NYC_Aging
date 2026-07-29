@@ -1,0 +1,366 @@
+@page "/menus/new/sample"
+@inject PythonApiClient Api
+@inject MenuDraftService Drafts
+@inject NavigationManager Navigation
+@inject AppModeService AppMode
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Menus</div>
+                <h2 style="margin-bottom: 6px">Add New - Sample Menu</h2>
+                <p class="muted" style="margin: 0">Select a sample menu template, confirm setup fields, then open the planning board.</p>
+            </div>
+            @if (IsAdmin)
+            {
+                <button type="button" class="secondary-button" @onclick="AddSampleMenu">Add Sample Menu</button>
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <div class="empty-state" style="margin-top: 12px; text-align: left">@Message</div>
+        }
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Sample Menus</div>
+                <h3 style="margin-bottom: 6px">Sample menu list</h3>
+            </div>
+            <InputText class="input compact-input resource-search" @bind-Value="SampleSearchText" @bind-Value:event="oninput" placeholder="Search sample menus" />
+        </div>
+
+        <div class="report-form compact-form" style="margin-top: 12px">
+            <label class="checkbox-chip">
+                <input type="checkbox" @bind="ShowIncompleteSampleMenus" />
+                <span>Show Incomplete Sample Menus</span>
+            </label>
+            <label>
+                <div class="small muted">Diet Type</div>
+                <InputSelect class="input" @bind-Value="SampleDietFilter">
+                    <option value="@AllMode">All</option>
+                    @foreach (var option in LegacyReferenceData.DietTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <span class="status-badge">@VisibleSampleMenus.Count() sample menus</span>
+        </div>
+
+        <div class="sample-browser-layout">
+            <div class="admin-table-wrap sample-menu-table-wrap">
+                <table class="admin-table sample-menu-table">
+                    <thead>
+                        <tr>
+                            <th>Sample menu</th>
+                            <th>Program</th>
+                            <th>Meal</th>
+                            <th>Diet</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var sample in VisibleSampleMenus)
+                        {
+                            var isSelected = SelectedPreviewSample?.Id == sample.Id;
+                            <tr class="@(isSelected ? "active-row" : "")">
+                                <td>
+                                    <strong>@sample.Name</strong>
+                                    <div class="muted small">@sample.Cycle · @sample.ItemCount items · @sample.DaysPerWeek-day cycle</div>
+                                </td>
+                                <td>@sample.ProgramType</td>
+                                <td>@sample.MealType</td>
+                                <td>@sample.DietType</td>
+                                <td><span class="status-badge @(sample.PassesNutrition ? "good" : "warn")">@(sample.PassesNutrition ? "Passed nutrition" : "Needs review")</span></td>
+                                <td>
+                                    <div class="resource-table-actions">
+                                        <button type="button" class="secondary-button tiny-button" @onclick="() => SelectSample(sample)">Preview</button>
+                                        <a class="secondary-button tiny-button" href="@($"/sample-menus/{sample.Id}")">Open</a>
+                                        @if (IsAdmin)
+                                        {
+                                            <button type="button" class="ghost-button tiny-button" @onclick="() => EditSample(sample)">Edit</button>
+                                            <button type="button" class="ghost-button tiny-button" @onclick="() => DeleteSample(sample)">Delete</button>
+                                        }
+                                        <button type="button" class="button tiny-button" @onclick="() => UseSample(sample.Id)">Use</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <aside class="sample-preview-panel">
+                @if (SelectedPreviewSample is null)
+                {
+                    <div class="empty-state">No sample menus match the current filters.</div>
+                }
+                else
+                {
+                    var previewSample = SelectedPreviewSample!;
+                    <div class="section-header compact-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">@previewSample.Name</h3>
+                            <p class="muted" style="margin: 0">@previewSample.ProgramType · @previewSample.MealType · @previewSample.DietType</p>
+                        </div>
+                        <button type="button" class="button tiny-button" @onclick="() => UseSample(previewSample.Id)">Use</button>
+                    </div>
+                    <div class="sample-mini-calendar sample-preview-calendar" style="grid-template-columns: repeat(@previewSample.DaysPerWeek, minmax(150px, 1fr))">
+                        @for (var dayIndex = 0; dayIndex < previewSample.DaysPerWeek; dayIndex++)
+                        {
+                            var day = SampleCalendarStart(previewSample).AddDays(dayIndex);
+                            <div class="sample-mini-day">
+                                <div class="sample-mini-day-label">@day.ToString("ddd").ToUpperInvariant()</div>
+                                <strong>@day.ToString("MMM d")</strong>
+                                <div class="sample-mini-recipes">
+                                    @foreach (var recipeName in SamplePreviewRecipes(previewSample, dayIndex))
+                                    {
+                                        <span>@recipeName</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </aside>
+        </div>
+    </section>
+
+    <section class="section sample-draft-setup">
+        <details class="setup-details">
+            <summary>Optional setup fields for selected sample</summary>
+            <div class="report-form sample-draft-form">
+                <label><div class="small muted">Menu Name</div><InputText class="input" @bind-Value="MenuName" /></label>
+                <label>
+                    <div class="small muted">Contract Name</div>
+                    @if (IsProvider)
+                    {
+                        <input class="input" value="@ContractName" disabled />
+                    }
+                    else
+                    {
+                        <InputSelect class="input" @bind-Value="ContractName">
+                            @foreach (var option in LegacyReferenceData.ContractNames)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    }
+                </label>
+                <label>
+                    <div class="small muted">Program Type</div>
+                    <InputSelect class="input" @bind-Value="ProgramType">
+                        @foreach (var option in LegacyReferenceData.ProgramTypes)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Meal Type</div>
+                    <InputSelect class="input" @bind-Value="MealType">
+                        @foreach (var option in LegacyReferenceData.MealTypes)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Menu Coverage</div>
+                    <InputSelect class="input" @bind-Value="MenuCoverage">
+                        @foreach (var option in LegacyReferenceData.MenuCoverageOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Diet Type</div>
+                    <InputSelect class="input" @bind-Value="DietType">
+                        @foreach (var option in LegacyReferenceData.DietTypes)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Select Sample Menu</div>
+                    <InputSelect class="input" @bind-Value="SelectedSampleId">
+                        @foreach (var sample in SampleMenus)
+                        {
+                            <option value="@sample.Id">@sample.Name</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label><div class="small muted">Start Date</div><InputDate class="input" Value="StartDate" ValueChanged="@(EventCallback.Factory.Create<DateTime>(this, OnStartDateChanged))" ValueExpression="@(() => StartDate)" /></label>
+            </div>
+            <div class="hero-actions sample-draft-actions">
+                <button type="button" class="button" @onclick="CreateDraft">Use selected sample</button>
+                <a class="ghost-button" href="/menus">Cancel</a>
+            </div>
+        </details>
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private const string AllMode = "all";
+    private List<HistoricalMenuSummaryDto> SampleMenus { get; set; } = [];
+    private string MenuName { get; set; } = "Weekly Menu from Sample";
+    private string ContractName { get; set; } = LegacyReferenceData.ContractNames[0];
+    private string ProgramType { get; set; } = "Congregate";
+    private string MealType { get; set; } = "Lunch";
+    private string MenuCoverage { get; set; } = "Lunch only";
+    private string DietType { get; set; } = "Regular";
+    private int SelectedSampleId { get; set; }
+    private DateTime StartDate { get; set; } = StartOfServiceWeek(DateTime.Today);
+    private bool ShowIncompleteSampleMenus { get; set; }
+    private string SampleDietFilter { get; set; } = AllMode;
+    private string SampleSearchText { get; set; } = string.Empty;
+    private string? Message { get; set; }
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+
+    private IEnumerable<HistoricalMenuSummaryDto> VisibleSampleMenus =>
+        SampleMenus
+            .Where(sample => ShowIncompleteSampleMenus || sample.PassesNutrition)
+            .Where(sample => SampleDietFilter == AllMode || (sample.DietType ?? string.Empty).Equals(SampleDietFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(sample => string.IsNullOrWhiteSpace(SampleSearchText)
+                || sample.Name.Contains(SampleSearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (sample.ProgramType ?? string.Empty).Contains(SampleSearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (sample.MealType ?? string.Empty).Contains(SampleSearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (sample.DietType ?? string.Empty).Contains(SampleSearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (sample.Cycle ?? string.Empty).Contains(SampleSearchText.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(sample => sample.Name);
+
+    private HistoricalMenuSummaryDto? SelectedPreviewSample =>
+        VisibleSampleMenus.FirstOrDefault(sample => sample.Id == SelectedSampleId) ?? VisibleSampleMenus.FirstOrDefault();
+
+    protected override void OnParametersSet()
+    {
+        if (IsProvider)
+        {
+            ContractName = AppMode.ProviderContract;
+        }
+    }
+
+    private static DateTime StartOfServiceWeek(DateTime date)
+    {
+        var daysSinceMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.Date.AddDays(-daysSinceMonday);
+    }
+
+    private static DateTime SampleCalendarStart(HistoricalMenuSummaryDto sample) => StartOfServiceWeek(sample.ServiceDate);
+
+    private static IEnumerable<string> SamplePreviewRecipes(HistoricalMenuSummaryDto sample, int dayIndex)
+    {
+        if (sample.RecipeNames.Count == 0)
+        {
+            return ["No recipes listed"];
+        }
+
+        return sample.RecipeNames
+            .Skip(dayIndex % sample.RecipeNames.Count)
+            .Concat(sample.RecipeNames)
+            .Take(Math.Min(4, sample.RecipeNames.Count));
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        SampleMenus = await Api.GetSampleMenusAsync();
+        SelectedSampleId = SampleMenus.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private void SelectSample(HistoricalMenuSummaryDto sample)
+    {
+        SelectedSampleId = sample.Id;
+        Message = null;
+    }
+
+    private void OnStartDateChanged(DateTime date)
+    {
+        StartDate = StartOfServiceWeek(date);
+    }
+
+    private async Task CreateDraft()
+    {
+        var sample = SelectedSampleId == 0 ? null : await Api.GetSampleMenuAsync(SelectedSampleId);
+        Drafts.Set(new MenuCreateRequest
+        {
+            Name = MenuName,
+            ContractName = ContractName,
+            ProgramType = ProgramType,
+            MealType = MealType,
+            MenuCoverage = MenuCoverage,
+            DietType = DietType,
+            MenuDurationType = sample?.MenuDurationType ?? "Regular",
+            MealServedFormat = sample?.MealServedFormat ?? "Hot",
+            MenuTags = sample?.MenuTags is { Count: > 0 } ? [.. sample.MenuTags] : [],
+            Cycle = sample?.Cycle ?? "Spring/Summer",
+            CycleStartDate = StartDate,
+            CycleEndDate = StartDate.AddMonths(6),
+            MenuFormat = "Weekly",
+            Status = "Draft",
+            StatusDate = StartDate,
+            SubmittedTo = "NYC Aging",
+            NutritionAdvisor = LegacyReferenceData.NutritionAdvisors[0],
+            CreatedBy = IsProvider ? AppMode.ProviderContract : "Menu staff",
+            StartDate = StartDate,
+            EndDate = StartDate.AddDays(4),
+            DaysPerWeek = 5,
+            CycleWeek = 1,
+            SampleMenuId = SelectedSampleId == 0 ? null : SelectedSampleId,
+            Contracts = IsProvider
+                ? [AppMode.ProviderContract]
+                : sample?.Contracts.Count > 0 ? [.. sample.Contracts] : [ContractName],
+            SubmittedPrograms = [ProgramType],
+            Items = sample?.Items.Select((item, index) => new MenuItemInput
+            {
+                RecipeId = item.RecipeId,
+                Position = index + 1,
+                DayIndex = index % 5,
+                MealSlot = $"{(sample.MealType ?? MealType).ToLowerInvariant()}_{NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? "entree")}",
+                ComponentKey = NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? "entree"),
+                SourceType = "sample"
+            }).ToList() ?? []
+        });
+        Navigation.NavigateTo("/menus/new");
+    }
+
+    private async Task UseSample(int sampleId)
+    {
+        SelectedSampleId = sampleId;
+        await CreateDraft();
+    }
+
+    private void AddSampleMenu()
+    {
+        Message = "Sample menu creation selected. New sample templates can be added after sample menu maintenance permissions are connected.";
+    }
+
+    private void EditSample(HistoricalMenuSummaryDto sample)
+    {
+        Message = $"Edit selected for {sample.Name}. Changes can be saved after sample menu editing is connected.";
+    }
+
+    private void DeleteSample(HistoricalMenuSummaryDto sample)
+    {
+        Message = $"Delete selected for {sample.Name}. Removal can be saved after sample menu maintenance is connected.";
+    }
+
+    private static string NormalizeComponentKey(string componentKey) => componentKey.ToLowerInvariant() switch
+    {
+        "grain" => "grains",
+        "side" => "vegetable",
+        "milk" => "dairy",
+        "juice" => "juice-dessert",
+        "dessert" => "juice-dessert",
+        "main" => "entree",
+        _ => componentKey.ToLowerInvariant()
+    };
+}

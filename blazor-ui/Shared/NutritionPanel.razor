@@ -1,0 +1,243 @@
+<div class="section nutrition-review">
+    <div class="section-header">
+        <div>
+            <h3 style="margin-bottom: 6px">@Title</h3>
+            <p class="muted" style="margin: 0">Nutrition totals update from the selected recipes in the current menu.</p>
+        </div>
+        <StatusPill Status="@OverallStatus" Label="@OverallLabel" />
+    </div>
+
+    <div class="nutrition-review-grid">
+        <div class="nutrition-summary-panel">
+            @if (Totals.Count > 0)
+            {
+                <div class="grid cols-2" style="gap: 12px">
+                    @foreach (var total in Totals)
+                    {
+                        <div class="metric-card nutrition-metric">
+                            <h4>@DisplayKey(total.Key)</h4>
+                            <div class="metric-value">@FormatNumber(total.Value)</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="nutrition-status-panel">
+            <div>
+                <h4 style="margin-bottom: 4px">Nutrient checks</h4>
+                <p class="muted small" style="margin: 0">Each row explains the target and shows recipe swaps when the menu needs help.</p>
+            </div>
+
+            <div class="status-stack">
+                @foreach (var row in Statuses)
+                {
+                    <div class="nutrition-status-card @CardClass(row.Status)">
+                        <div class="nutrition-status-top">
+                            <div class="nutrition-status-title">
+                                <span class="status-icon @CardClass(row.Status)">@StatusGlyph(row.Status)</span>
+                                <div>
+                                    <strong>@DisplayKey(row.NutrientKey)</strong>
+                                    <div class="muted small">@row.Message</div>
+                                </div>
+                            </div>
+                            <div class="nutrition-status-meta">
+                                <StatusPill Status="@row.Status" Label="@StatusLabel(row.Status)" />
+                                <span class="status-badge brand">@FormatNumber(row.Total) @row.Unit</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div style="margin-top: 6px">
+                <h4 style="margin-bottom: 4px">Meal requirements</h4>
+                <p class="muted small" style="margin: 0">These checks use the actual breakfast, lunch, and dinner slots in the menu.</p>
+            </div>
+
+            <div class="status-stack">
+                @foreach (var requirement in MealRequirements)
+                {
+                    <div class="nutrition-status-card @CardClass(requirement.Status)">
+                        <div class="nutrition-status-top">
+                            <div class="nutrition-status-title">
+                                <span class="status-icon @CardClass(requirement.Status)">@StatusGlyph(requirement.Status)</span>
+                                <div>
+                                    <strong>@requirement.Title</strong>
+                                    <div class="muted small">@RequirementSummary(requirement)</div>
+                                </div>
+                            </div>
+                            <div class="nutrition-status-meta">
+                                <StatusPill Status="@requirement.Status" Label="@StatusLabel(requirement.Status)" />
+                                @if (OnRecipeSelected.HasDelegate && requirement.Status != "pass" && requirement.Suggestions.Any())
+                                {
+                                    <button type="button" class="ghost-button tiny-button" @onclick="() => ApplyTopSuggestion(requirement)">Fix with suggestions</button>
+                                }
+                            </div>
+                        </div>
+
+                        @if (requirement.MissingComponentBadges.Any())
+                        {
+                            <div class="component-badge-row">
+                                @foreach (var badge in requirement.MissingComponentBadges)
+                                {
+                                    <span class="component-badge missing @BadgeClass(badge)">
+                                        <span class="component-icon">@BadgeGlyph(badge)</span>
+                                        <span>@badge</span>
+                                    </span>
+                                }
+                            </div>
+                        }
+
+                        @if (requirement.Details.Any())
+                        {
+                            <div class="nutrition-detail-list">
+                                @foreach (var detail in requirement.Details.Take(4))
+                                {
+                                    <div class="nutrition-detail-item">@detail</div>
+                                }
+                            </div>
+                        }
+
+                        @if (requirement.Suggestions.Any())
+                        {
+                            <div class="nutrition-suggestions">
+                                <div class="small muted">Suggested swaps from approved recipes</div>
+                                <div class="status-stack">
+                                    @foreach (var item in requirement.Suggestions.Take(3))
+                                    {
+                                        <div class="nutrition-suggestion-row">
+                                            <div>
+                                                <strong>@item.Recipe.RecipeName</strong>
+                                                <div class="muted small">@string.Join(" · ", item.Reasons)</div>
+                                            </div>
+                                            @if (OnRecipeSelected.HasDelegate)
+                                            {
+                                                <button type="button" class="button small-button" @onclick="() => OnRecipeSelected.InvokeAsync(item.Recipe)">Use</button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Nutrition analysis";
+
+    [Parameter]
+    public IReadOnlyDictionary<string, decimal> Totals { get; set; } = new Dictionary<string, decimal>();
+
+    [Parameter]
+    public IReadOnlyList<NutrientStatusDto> Statuses { get; set; } = Array.Empty<NutrientStatusDto>();
+
+    [Parameter]
+    public IReadOnlyList<MealRequirementDto> MealRequirements { get; set; } = Array.Empty<MealRequirementDto>();
+
+    [Parameter]
+    public string OverallStatus { get; set; } = "pending";
+
+    [Parameter]
+    public EventCallback<RecipeDto> OnRecipeSelected { get; set; }
+
+    private string OverallLabel => OverallStatus.ToLowerInvariant() switch
+    {
+        "pass" => "Pass",
+        "warning" => "Needs attention",
+        "fail" => "Needs revision",
+        _ => "Pending"
+    };
+
+    private static string DisplayKey(string key) => key.Replace("_", " ").ToLowerInvariant() switch
+    {
+        "sodium mg" => "Sodium",
+        "protein g" => "Protein",
+        "fiber g" => "Fiber",
+        "fat g" => "Fat",
+        "calories" => "Calories",
+        _ => key.Replace("_", " ")
+    };
+
+    private static string FormatNumber(decimal value) => value % 1 == 0 ? value.ToString("0") : value.ToString("0.0");
+
+    private static string StatusLabel(string status) => status.ToLowerInvariant() switch
+    {
+        "pass" => "Pass",
+        "warning" => "Warning",
+        "fail" => "Fail",
+        _ => status
+    };
+
+    private static string StatusGlyph(string status) => status.ToLowerInvariant() switch
+    {
+        "pass" => "✓",
+        "warning" => "!",
+        "fail" => "×",
+        _ => "•"
+    };
+
+    private static string CardClass(string status) => status.ToLowerInvariant() switch
+    {
+        "pass" => "pass",
+        "warning" => "warning",
+        "fail" => "fail",
+        _ => "brand"
+    };
+
+    private static string BadgeClass(string badge) => badge.ToLowerInvariant() switch
+    {
+        "fruit" => "fruit",
+        "vegetable" => "vegetable",
+        "fruit/veg" => "fruit-veg",
+        "dairy" => "dairy",
+        "whole grain" => "grain",
+        "plant protein" => "protein",
+        "processed meat" => "meat",
+        "entrée" => "entree",
+        "entree" => "entree",
+        _ => "brand"
+    };
+
+    private static string BadgeGlyph(string badge) => badge.ToLowerInvariant() switch
+    {
+        "fruit" => "●",
+        "vegetable" => "▲",
+        "fruit/veg" => "◐",
+        "dairy" => "◉",
+        "whole grain" => "▦",
+        "plant protein" => "◆",
+        "processed meat" => "×",
+        "entree" => "■",
+        _ => "•"
+    };
+
+    private static string RequirementSummary(MealRequirementDto requirement)
+    {
+        if (requirement.MissingComponentBadges.Any())
+        {
+            return requirement.MissingComponentBadges.Count == 1
+                ? $"{requirement.Title} is missing {requirement.MissingComponentBadges[0]}."
+                : $"{requirement.Title} is missing {string.Join(", ", requirement.MissingComponentBadges.Take(requirement.MissingComponentBadges.Count - 1))} and {requirement.MissingComponentBadges.Last()}.";
+        }
+
+        return requirement.Message;
+    }
+
+    private async Task ApplyTopSuggestion(MealRequirementDto requirement)
+    {
+        var topSuggestion = requirement.Suggestions.FirstOrDefault();
+        if (topSuggestion is null)
+        {
+            return;
+        }
+
+        await OnRecipeSelected.InvokeAsync(topSuggestion.Recipe);
+    }
+
+}

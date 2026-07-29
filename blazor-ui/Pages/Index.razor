@@ -1,0 +1,428 @@
+@page "/"
+@inject PythonApiClient Api
+@inject AppModeService AppMode
+
+<div class="grid workspace-home" style="gap: 20px">
+    <section class="section workspace-banner">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">NYC Aging</div>
+                <h2 style="margin-bottom: 6px">Simple Servings</h2>
+                <p class="muted" style="margin: 0">Recipes, menus, sample menus, reports, and staff reference files.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid cols-2 home-workbench">
+        <div class="section todo-panel">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">To-do list</div>
+                    <h3 style="margin-bottom: 6px">@TodoHeading</h3>
+                    <p class="muted" style="margin: 0">@TodoDescription</p>
+                </div>
+                <span class="status-badge brand">@TodoItems.Count() item@(TodoItems.Count() == 1 ? "" : "s")</span>
+            </div>
+
+            @if (!TodoItems.Any())
+            {
+                <div class="empty-state" style="margin-top: 14px">@TodoEmptyMessage</div>
+            }
+            else
+            {
+                <div class="todo-list">
+                    @foreach (var item in TodoItems)
+                    {
+                        <a class="todo-row link-card" href="@item.Href">
+                            <div class="todo-main">
+                                <span class="status-badge @item.BadgeClass">@item.Badge</span>
+                                <div>
+                                    <strong>@item.Title</strong>
+                                    <div class="muted small">@item.Description</div>
+                                </div>
+                            </div>
+                            <div class="todo-meta">
+                                <span>@item.MenuLabel</span>
+                                <span>@item.DateLabel</span>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="section menu-shortcuts-panel">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Menus</div>
+                    <h3 style="margin-bottom: 6px">@ShortcutHeading</h3>
+                    <p class="muted" style="margin: 0">@ShortcutDescription</p>
+                </div>
+            </div>
+            <div class="shortcut-list">
+                @foreach (var shortcut in MenuShortcuts)
+                {
+                    <a class="shortcut-row link-card" href="@shortcut.Href">
+                        <div>
+                            <strong>@shortcut.Title</strong>
+                            <div class="muted small">@shortcut.Description</div>
+                        </div>
+                        <span class="secondary-button tiny-button">@shortcut.Action</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="grid cols-2">
+        <div class="section">
+            <div class="eyebrow">Notices</div>
+            <h3>Latest notices</h3>
+            <div class="table-list" style="margin-top: 14px">
+                @foreach (var item in NewsItems)
+                {
+                    <div class="table-row compact-row">
+                        <div>
+                            <strong>@item.Title</strong>
+                            <div class="muted small">@item.Date.ToString("MMM d, yyyy") · @item.Body</div>
+                        </div>
+                        <span class="tag-chip">@item.Type</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Featured Recipes</div>
+                    <h3>Popular recipes</h3>
+                </div>
+                <span class="status-badge brand">@FeaturedRecipes.Count recipes</span>
+            </div>
+            <div class="featured-recipes">
+                @foreach (var recipe in FeaturedRecipes)
+                {
+                    <a class="recipe-strip-card featured-recipe-card link-card" href="@($"/recipes/{recipe.RecipeId}")">
+                        <div class="recipe-card-head">
+                            <div>
+                                <strong>@recipe.RecipeName</strong>
+                                <div class="muted small">@DisplayMealType(recipe.MealType) · @DisplayCategory(recipe.Category) · @recipe.Calories kcal</div>
+                            </div>
+                            <span class="status-badge brand">@DisplayCategory(recipe.Category)</span>
+                        </div>
+                        <div class="recipe-card-meta-line">
+                            <span>@DisplayMealType(recipe.MealType)</span>
+                            <span>@(recipe.IsPublic ? "Public" : "Private")</span>
+                            <span>Approved</span>
+                        </div>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="grid cols-2">
+        <div class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Sample Menus</div>
+                    <h3>Sample menu library</h3>
+                </div>
+                <a class="ghost-button" href="/menus/new/sample">Add from sample</a>
+            </div>
+            <div class="table-list" style="margin-top: 14px">
+                @foreach (var sample in SampleMenus.Take(5))
+                {
+                    <a class="table-row compact-row link-card" href="@($"/sample-menus/{sample.Id}")">
+                        <div>
+                            <strong>@sample.Name</strong>
+                            <div class="muted small">@sample.MealType · @sample.Cycle · @sample.ItemCount items</div>
+                        </div>
+                        <span class="tag-chip">@(sample.PassesNutrition ? "Complete" : "Review")</span>
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="section">
+            <div class="eyebrow">Resources</div>
+            <h3>Files and references</h3>
+            <div class="table-list" style="margin-top: 14px">
+                @foreach (var item in ResourceLinks)
+                {
+                    <a class="table-row compact-row link-card" href="@item.Href">
+                        <div>
+                            <strong>@item.Title</strong>
+                            <div class="muted small">@item.Description</div>
+                        </div>
+                        <span class="tag-chip">@item.Type</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private List<RecipeDto> FeaturedRecipes { get; set; } = [];
+    private List<RecipeDto> PendingRecipeSubmissions { get; set; } = [];
+    private List<HistoricalMenuSummaryDto> SampleMenus { get; set; } = [];
+    private List<MenuSummaryDto> SavedMenus { get; set; } = [];
+    private Dictionary<int, List<MenuReviewCommentDto>> MenuCommentsByMenuId { get; set; } = [];
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+
+    private string TodoHeading => IsProvider
+        ? "Provider menu follow-up"
+        : "Review queue";
+
+    private string TodoDescription => IsProvider
+        ? "Menus with NYC Aging comments, returned corrections, or approval updates for your contract."
+        : "Menus and new recipe submissions that need department review.";
+
+    private string TodoEmptyMessage => IsProvider
+        ? "No provider follow-up items right now."
+        : "No menus or recipe submissions are currently pending review.";
+
+    private IEnumerable<HomeTodoItem> TodoItems => IsProvider ? ProviderTodoItems : AdminTodoItems;
+    private string ShortcutHeading => IsProvider ? "Menu shortcuts" : "Review shortcuts";
+    private string ShortcutDescription => IsProvider
+        ? "Open submitted menus, sample menus, and printable reports."
+        : "Jump directly to menu creation, recipe review, menu review, and reports.";
+    private IEnumerable<HomeShortcut> MenuShortcuts => IsProvider ? ProviderMenuShortcuts : AdminMenuShortcuts;
+
+    private IEnumerable<HomeTodoItem> AdminTodoItems =>
+        AdminMenuTodoItems
+            .Concat(AdminRecipeTodoItems)
+            .OrderByDescending(item => item.SortDate)
+            .Take(8);
+
+    private IEnumerable<HomeTodoItem> AdminMenuTodoItems =>
+        SavedMenus
+            .Where(menu => IsPendingAdminReview(menu))
+            .Select(menu =>
+            {
+                var sortDate = menu.SubmittedToNycAgingOn ?? menu.StatusDate ?? menu.CreatedAt;
+                return new HomeTodoItem(
+                    $"Review {menu.Name}",
+                    $"{menu.ContractName ?? string.Join(", ", menu.Contracts)} · {menu.ProgramType} · {menu.MealType}",
+                    $"Menu ID {menu.Id}",
+                    sortDate.ToString("MMM d"),
+                    "Menu review",
+                    "warn",
+                    $"/menus/{menu.Id}",
+                    sortDate);
+            });
+
+    private IEnumerable<HomeTodoItem> AdminRecipeTodoItems =>
+        PendingRecipeSubmissions
+            .Select(recipe =>
+            {
+                var sortDate = recipe.CreatedOn ?? DateTime.Today;
+                return new HomeTodoItem(
+                    $"Review recipe: {recipe.RecipeName}",
+                    $"{recipe.ContributedBy ?? "Submitted recipe"} · {recipe.MealType} · {recipe.Category}",
+                    $"Recipe ID {recipe.RecipeId}",
+                    sortDate.ToString("MMM d"),
+                    "Recipe review",
+                    "warn",
+                    $"/recipes/{recipe.RecipeId}/review",
+                    sortDate);
+            });
+
+    private IEnumerable<HomeTodoItem> ProviderTodoItems =>
+        SavedMenus
+            .Where(menu => AppMode.CanProviderSeeMenu(menu))
+            .Where(menu => HasProviderReviewComments(menu) || IsProviderStatusUpdate(menu))
+            .OrderByDescending(menu => menu.StatusDate ?? menu.CreatedAt)
+            .Take(6)
+            .Select(menu =>
+            {
+                var sortDate = menu.StatusDate ?? menu.CreatedAt;
+                return new HomeTodoItem(
+                    ProviderTodoTitle(menu),
+                    ProviderTodoDescription(menu),
+                    $"Menu ID {menu.Id}",
+                    sortDate.ToString("MMM d"),
+                    HasProviderReviewComments(menu) ? "Comments" : menu.Status,
+                    HasProviderReviewComments(menu) ? "warn" : "good",
+                    $"/menus/{menu.Id}?tab=comments",
+                    sortDate);
+            });
+
+    private static readonly List<NewsItem> NewsItems =
+    [
+        new("Nutrition background on meal requirements", "Notice", "Use when reviewing meal pattern requirements before submission.", DateTime.Today.AddDays(-6)),
+        new("Simple Servings Help Page", "Notice", "Reference for recipe browsing, menu creation, reports, and draft workflows.", DateTime.Today.AddDays(-13)),
+        new("Cycle menu preparation", "Notice", "Confirm cycle, service days, diet type, and contract selection before building weeks.", DateTime.Today.AddDays(-25))
+    ];
+
+    private static readonly List<HomeShortcut> AdminMenuShortcuts =
+    [
+        new("Add New Menu", "Create a blank menu using the legacy setup fields.", "Open", "/menus/new/blank"),
+        new("Recipe Review", "Review pending recipe submissions before catalog approval.", "Open", "/recipes/review"),
+        new("Menu List", "Review submitted, approved, returned, and completed menus.", "Open", "/menus/list"),
+        new("Sample Menus", "Start from the sample menu library.", "Open", "/menus/new/sample"),
+        new("Reports", "Print daily menus, monthly calendars, and nutrition labels.", "Open", "/reports")
+    ];
+
+    private static readonly List<HomeShortcut> ProviderMenuShortcuts =
+    [
+        new("Build Menu", "Start a new blank weekly menu for your contract.", "Open", "/menus/new/blank"),
+        new("My Drafts", "Continue menus that are still draft, incomplete, or returned for correction.", "Open", "/menus/drafts"),
+        new("My Menus", "View menus submitted by your contract and approved outputs.", "Open", "/menus/list"),
+        new("Sample Menus", "Choose a sample menu as the starting point for a submission.", "Open", "/menus/new/sample"),
+        new("Reports", "Print daily menus, monthly calendars, and nutrition labels.", "Open", "/reports")
+    ];
+
+    private static readonly List<ResourceLink> ResourceLinks =
+    [
+        new("Meal rules", "Nutrition requirements, portion guidance, and menu review references.", "Files", "/resources"),
+        new("Forms and templates", "Printable planning worksheets and review checklists.", "Forms", "/resources"),
+        new("Nutrition messages", "Reference material used by staff and providers during planning.", "Files", "/resources")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var analytics = await Api.GetAnalyticsAsync();
+        var topRecipeIds = analytics.TopRecipes.Select(recipe => recipe.RecipeId).ToHashSet();
+        var allRecipes = await Api.GetRecipesAsync();
+        var recipes = allRecipes.Where(recipe => recipe.IsApproved && !recipe.IsDead).ToList();
+        PendingRecipeSubmissions = allRecipes
+            .Where(recipe => !recipe.IsApproved && !recipe.IsDead)
+            .OrderByDescending(recipe => recipe.CreatedOn ?? DateTime.MinValue)
+            .ThenByDescending(recipe => recipe.RecipeId)
+            .Take(10)
+            .ToList();
+        SampleMenus = await Api.GetSampleMenusAsync();
+        SavedMenus = await Api.GetMenusAsync();
+        MenuCommentsByMenuId = [];
+        foreach (var menu in SavedMenus.Take(50))
+        {
+            var comments = await Api.GetMenuCommentsAsync(menu.Id);
+            if (comments.Count > 0)
+            {
+                MenuCommentsByMenuId[menu.Id] = comments;
+            }
+        }
+
+        FeaturedRecipes = analytics.TopRecipes.Count > 0
+            ? analytics.TopRecipes
+                .Select(top => recipes.FirstOrDefault(recipe => recipe.RecipeId == top.RecipeId))
+                .Where(recipe => recipe is not null)
+                .Select(recipe => recipe!)
+                .Take(8)
+                .ToList()
+            : recipes.Where(recipe => recipe.IsFavorite).Take(8).ToList();
+
+        if (FeaturedRecipes.Count < 8)
+        {
+            FeaturedRecipes.AddRange(
+                recipes
+                    .Where(recipe => recipe.IsApproved && !topRecipeIds.Contains(recipe.RecipeId) && FeaturedRecipes.All(featured => featured.RecipeId != recipe.RecipeId))
+                    .Take(8 - FeaturedRecipes.Count));
+        }
+    }
+
+    private static bool IsPendingAdminReview(MenuSummaryDto menu) =>
+        menu.Status.Contains("Submitted To NYC Aging", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Resubmitted", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Contract(s) Reviewed", StringComparison.OrdinalIgnoreCase);
+
+    private bool HasProviderReviewComments(MenuSummaryDto menu) =>
+        !string.IsNullOrWhiteSpace(menu.ReturnedComments)
+        || !string.IsNullOrWhiteSpace(menu.ApprovalNotes)
+        || MenuCommentsByMenuId.GetValueOrDefault(menu.Id, new List<MenuReviewCommentDto>())
+            .Any(comment => !comment.Visibility.Equals("Internal", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsProviderStatusUpdate(MenuSummaryDto menu) =>
+        menu.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("NYC Aging Edited", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Completed", StringComparison.OrdinalIgnoreCase);
+
+    private static string DisplayCategory(string value) => value switch
+    {
+        "entree" => "Entrée",
+        "grain" => "Grains",
+        "milk" => "Milk/Yogurt",
+        "vegetable" => "Vegetable",
+        "fruit" => "Fruit",
+        "appetizer" => "Appetizer",
+        "condiment" => "Condiments",
+        _ => string.IsNullOrWhiteSpace(value) ? "Recipe" : char.ToUpperInvariant(value[0]) + value[1..]
+    };
+
+    private static string DisplayMealType(string value) => value switch
+    {
+        "breakfast" => "Breakfast",
+        "lunch" => "Lunch",
+        "dinner" => "Dinner",
+        "snack" => "Snack",
+        _ => string.IsNullOrWhiteSpace(value) ? "Meal" : char.ToUpperInvariant(value[0]) + value[1..]
+    };
+
+    private string ProviderTodoTitle(MenuSummaryDto menu)
+    {
+        var latestComment = LatestProviderVisibleComment(menu);
+        if (latestComment is not null)
+        {
+            if (latestComment.Action.Contains("Comments sent", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Review comments sent for {menu.Name}";
+            }
+
+            if (latestComment.Action.Contains("Review comment", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"NYC Aging comment added for {menu.Name}";
+            }
+
+            return $"{latestComment.Action} added for {menu.Name}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ReturnedComments))
+        {
+            return $"Comments received for {menu.Name}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ApprovalNotes))
+        {
+            return $"Approval note added for {menu.Name}";
+        }
+
+        return $"{menu.Name} status updated";
+    }
+
+    private string ProviderTodoDescription(MenuSummaryDto menu)
+    {
+        var latestComment = LatestProviderVisibleComment(menu);
+        if (latestComment is not null)
+        {
+            return latestComment.Body;
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ReturnedComments))
+        {
+            return menu.ReturnedComments!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ApprovalNotes))
+        {
+            return menu.ApprovalNotes!;
+        }
+
+        return $"{menu.Status} · {menu.ContractName ?? string.Join(", ", menu.Contracts)}";
+    }
+
+    private MenuReviewCommentDto? LatestProviderVisibleComment(MenuSummaryDto menu) =>
+        MenuCommentsByMenuId.GetValueOrDefault(menu.Id, new List<MenuReviewCommentDto>())
+            .Where(comment => !comment.Visibility.Equals("Internal", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(comment => comment.CreatedAt)
+            .FirstOrDefault();
+
+    private sealed record NewsItem(string Title, string Type, string Body, DateTime Date);
+    private sealed record ResourceLink(string Title, string Description, string Type, string Href);
+    private sealed record HomeShortcut(string Title, string Description, string Action, string Href);
+    private sealed record HomeTodoItem(string Title, string Description, string MenuLabel, string DateLabel, string Badge, string BadgeClass, string Href, DateTime SortDate);
+}

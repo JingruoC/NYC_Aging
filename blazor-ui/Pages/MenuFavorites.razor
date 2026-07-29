@@ -1,0 +1,93 @@
+@page "/menus/favorites"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Menus</div>
+                <h2 style="margin-bottom: 6px">Favorite menus</h2>
+                <p class="muted" style="margin: 0">Menus saved for faster reuse and review.</p>
+            </div>
+            <div class="hero-actions">
+                <a class="button" href="/menus/new/blank">Add New</a>
+                <a class="ghost-button" href="/menus/list">Menu List</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        @if (!FavoriteMenus.Any())
+        {
+            <div class="empty-state">No favorite menus yet. Use the Favorite action on the Menu List to add menus here.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var menu in FavoriteMenus)
+                {
+                    <div class="table-row menu-table-row">
+                        <div class="table-main">
+                            <strong>@menu.Name</strong>
+                            <div class="muted small">
+                                @menu.StartDate?.ToString("MMM d, yyyy") to @menu.EndDate?.ToString("MMM d, yyyy")
+                                · Week @menu.CycleWeek · @menu.DaysPerWeek-day cycle
+                            </div>
+                            <div class="muted small">@menu.ContractName · @menu.ProgramType · @menu.MealType · @menu.DietType · @menu.MenuFormat</div>
+                            <div class="tag-list">
+                                <span class="tag-chip">Favorite</span>
+                                <span class="tag-chip">@menu.Status</span>
+                                @foreach (var recipeName in menu.RecipeNames.Take(3))
+                                {
+                                    <span class="tag-chip">@recipeName</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="table-metric">
+                            <div>@menu.ItemCount items</div>
+                            <div class="muted small">@menu.CreatedAt.ToString("MMM d")</div>
+                        </div>
+                        <div class="table-metric">
+                            <div>@menu.Status</div>
+                            <div class="muted small">@menu.StatusDate?.ToString("MMM d")</div>
+                        </div>
+                        <div class="table-metric">
+                            <div>@menu.DaysPerWeek-day</div>
+                            <div class="muted small">Cycle @menu.CycleWeek</div>
+                        </div>
+                        <div>
+                            <div class="hero-actions">
+                                <a class="button" href="@($"/menus/{menu.Id}")">Open</a>
+                                <button type="button" class="secondary-button tiny-button" @onclick="() => ToggleFavorite(menu)">Unfavorite</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<MenuSummaryDto> Menus { get; set; } = [];
+
+    private IEnumerable<MenuSummaryDto> FavoriteMenus => Menus
+        .Where(menu => menu.IsFavorite)
+        .OrderByDescending(menu => menu.CreatedAt);
+
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/menus/list", replace: true);
+    }
+
+    private async Task ToggleFavorite(MenuSummaryDto menu)
+    {
+        var updated = await Api.SetMenuFavoriteAsync(menu.Id, false);
+        var index = Menus.FindIndex(item => item.Id == updated.Id);
+        if (index >= 0)
+        {
+            Menus[index] = updated;
+        }
+    }
+}

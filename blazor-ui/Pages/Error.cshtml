@@ -1,0 +1,27 @@
+@page
+@{
+    Layout = null;
+    Response.StatusCode = 500;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error - Simple Servings</title>
+    <link rel="stylesheet" href="~/css/app.css" />
+</head>
+<body>
+    <main class="content" style="max-width: 760px; margin: 64px auto;">
+        <section class="section">
+            <div class="eyebrow">Simple Servings</div>
+            <h1>Something went wrong</h1>
+            <p class="muted">
+                The app could not complete the request. Please reload the page or return to the home page.
+            </p>
+            <a class="button" href="/">Return home</a>
+        </section>
+    </main>
+</body>
+</html>

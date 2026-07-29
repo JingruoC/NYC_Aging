@@ -1,0 +1,241 @@
+@page "/sample-menus/{MenuId:int}"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+@inject MenuDraftService Drafts
+
+<div class="grid" style="gap: 18px">
+    @if (SampleMenu is null)
+    {
+        <section class="section">
+            <div class="empty-state">Loading sample menu...</div>
+        </section>
+    }
+    else
+    {
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Sample menu</div>
+                    <h2 style="margin-bottom: 6px">@SampleMenu.Name</h2>
+                    <p class="muted" style="margin: 0">
+                        @SampleMenu.ServiceDate.ToString("MMM d, yyyy")
+                        · @(SampleMenu.PassesNutrition ? "Passed" : "Needs review")
+                    </p>
+                </div>
+                <div class="hero-actions">
+                    <a class="ghost-button" href="/menus/new/sample">Back to sample menus</a>
+                    <button type="button" class="button" @onclick="AddAsDraft">Use this sample</button>
+                    <button type="button" class="ghost-button" @onclick="PrintMenu">View/Print Entire Menu</button>
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <div class="empty-state" style="margin-top: 12px; text-align: left">@Message</div>
+            }
+
+            <div class="workspace-summary" style="margin-top: 16px">
+                <div class="workspace-summary-item">
+                    <div class="small muted">Items</div>
+                    <div class="summary-value">@SampleMenu.Items.Count</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Nutrition</div>
+                    <div class="summary-value">@(SampleMenu.PassesNutrition ? "Pass" : "Review")</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Cycle</div>
+                    <div class="summary-value">@SampleMenu.Cycle</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Menu Duration/Type</div>
+                    <div class="summary-value">@SampleMenu.MenuDurationType</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Meal Served Format</div>
+                    <div class="summary-value">@SampleMenu.MealServedFormat</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Contracts</div>
+                    <div class="summary-value">@SampleMenu.Contracts.Count</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h3 style="margin-bottom: 6px">Calendar preview</h3>
+                    <p class="muted" style="margin: 0">The sample is shown in the same day-and-component structure used by the menu builder.</p>
+                </div>
+                <StatusPill Status="brand" Label="@($"{SampleMenu.Items.Count} items")" />
+            </div>
+
+            <div class="calendar-scroll" style="margin-top: 18px">
+                <div class="sample-detail-calendar" style="grid-template-columns: 140px repeat(@SampleMenu.DaysPerWeek, 1fr)">
+                    <div class="calendar-corner"></div>
+                    @for (var dayIndex = 0; dayIndex < SampleMenu.DaysPerWeek; dayIndex++)
+                    {
+                        var day = SampleCalendarStart(SampleMenu).AddDays(dayIndex);
+                        <div class="calendar-day-header">
+                            <div class="day-header-top">
+                                <div>
+                                    <div class="day-name">@day.ToString("ddd").ToUpperInvariant()</div>
+                                    <strong>@day.ToString("MMM d")</strong>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @foreach (var component in VisibleSampleComponents)
+                    {
+                        <div class="meal-label">
+                            <div>
+                                <div class="meal-label-title">@component.Label</div>
+                                <div class="meal-label-subtitle">@component.Requirement</div>
+                            </div>
+                        </div>
+                        @for (var dayIndex = 0; dayIndex < SampleMenu.DaysPerWeek; dayIndex++)
+                        {
+                            <div class="calendar-cell sample-preview-cell">
+                                @{
+                                    var items = ItemsForComponent(component.Key, dayIndex).ToList();
+                                }
+                                @if (items.Any())
+                                {
+                                    @foreach (var item in items)
+                                    {
+                                        <div class="scheduled-card">
+                                            <div class="meal-badge">@component.Label.Substring(0, 1)</div>
+                                            <strong>@item.Recipe.RecipeName</strong>
+                                            <span>@item.Recipe.Category · @item.Recipe.Calories kcal</span>
+                                            <a class="ghost-button tiny-button" href="@($"/recipes/{item.RecipeId}")">View recipe</a>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="muted small">No item listed</span>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h3 style="margin-bottom: 6px">Notes</h3>
+                    <p class="muted" style="margin: 0">@SampleMenu.Notes</p>
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    [Parameter] public int MenuId { get; set; }
+
+    private HistoricalMenuDetailDto? SampleMenu { get; set; }
+    private string? Message { get; set; }
+    private IEnumerable<LegacyMealComponent> VisibleSampleComponents =>
+        SampleMenu is null
+            ? []
+            : LegacyReferenceData.MealComponents
+                .Where(component => SampleMenu.Items.Any(item => NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category) == component.Key));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        SampleMenu = await Api.GetSampleMenuAsync(MenuId);
+    }
+
+    private void AddAsDraft()
+    {
+        if (SampleMenu is null)
+        {
+            return;
+        }
+
+        Drafts.Set(new MenuCreateRequest
+        {
+            Name = SampleMenu.Name,
+            ContractName = string.Join(", ", SampleMenu.Contracts),
+            ProgramType = SampleMenu.ProgramType,
+            MealType = SampleMenu.MealType,
+            MenuCoverage = SampleMenu.MenuCoverage ?? $"{SampleMenu.MealType} only",
+            DietType = SampleMenu.DietType,
+            MenuDurationType = SampleMenu.MenuDurationType,
+            MealServedFormat = SampleMenu.MealServedFormat,
+            MenuTags = [.. SampleMenu.MenuTags],
+            Cycle = SampleMenu.Cycle,
+            CycleStartDate = SampleMenu.ServiceDate,
+            CycleEndDate = SampleMenu.ServiceDate.AddMonths(6),
+            Contracts = [.. SampleMenu.Contracts],
+            SampleMenuId = SampleMenu.Id,
+            StartDate = SampleMenu.ServiceDate,
+            EndDate = SampleMenu.ServiceDate.AddDays(4),
+            DaysPerWeek = 5,
+            CycleWeek = 1,
+            Items = SampleMenu.Items
+                .OrderBy(item => item.Position)
+                .Select((item, index) => new MenuItemInput
+                {
+                    RecipeId = item.RecipeId,
+                    Position = index + 1,
+                    DayIndex = index / 3,
+                    MealSlot = $"{(SampleMenu.MealType ?? "Lunch").ToLowerInvariant()}_{(item.ComponentKey ?? item.MealSlot ?? "entree")}",
+                    ComponentKey = item.ComponentKey ?? item.MealSlot ?? "entree",
+                    IsAlternate = item.IsAlternate,
+                    SourceType = "sample"
+                })
+                .ToList()
+        });
+
+        Navigation.NavigateTo("/menus/new");
+    }
+
+    private void PrintMenu()
+    {
+        Navigation.NavigateTo("/reports");
+    }
+
+    private static string NormalizeComponentKey(string componentKey) => componentKey.ToLowerInvariant() switch
+    {
+        "grain" => "grains",
+        "side" => "vegetable",
+        "milk" => "dairy",
+        "juice" => "juice-dessert",
+        "dessert" => "juice-dessert",
+        "main" => "entree",
+        _ => componentKey.ToLowerInvariant()
+    };
+
+    private IEnumerable<HistoricalMenuItemDto> ItemsForComponent(string componentKey, int dayIndex)
+    {
+        if (SampleMenu is null)
+        {
+            return [];
+        }
+
+        var matchingItems = SampleMenu.Items
+            .Where(item => NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category) == componentKey)
+            .OrderBy(item => item.Position)
+            .ToList();
+
+        if (matchingItems.Count == 0)
+        {
+            return [];
+        }
+
+        return [matchingItems[dayIndex % matchingItems.Count]];
+    }
+
+    private static DateTime SampleCalendarStart(HistoricalMenuDetailDto sample)
+    {
+        var daysSinceMonday = ((int)sample.ServiceDate.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return sample.ServiceDate.Date.AddDays(-daysSinceMonday);
+    }
+}

@@ -1,0 +1,212 @@
+@page "/menus/new/blank"
+@inject MenuDraftService Drafts
+@inject NavigationManager Navigation
+@inject AppModeService AppMode
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Menus</div>
+                <h2 style="margin-bottom: 6px">Add New - Blank Menu</h2>
+                <p class="muted" style="margin: 0">Create a menu header using the legacy setup fields, then open the planning board.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="report-form">
+            <label><div class="small muted">Menu Name</div><InputText class="input" @bind-Value="MenuName" /></label>
+            <label>
+                <div class="small muted">Contract Name</div>
+                @if (IsProvider)
+                {
+                    <input class="input" value="@ContractName" disabled />
+                }
+                else
+                {
+                    <InputSelect class="input" @bind-Value="ContractName">
+                        @foreach (var option in LegacyReferenceData.ContractNames)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                }
+            </label>
+            <label>
+                <div class="small muted">Program Type</div>
+                <InputSelect class="input" @bind-Value="ProgramType">
+                    @foreach (var option in LegacyReferenceData.ProgramTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Meal Type</div>
+                <InputSelect class="input" @bind-Value="MealType">
+                    @foreach (var option in LegacyReferenceData.MealTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Menu Coverage</div>
+                <InputSelect class="input" @bind-Value="MenuCoverage">
+                    @foreach (var option in LegacyReferenceData.MenuCoverageOptions)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Diet Type</div>
+                <InputSelect class="input" @bind-Value="DietType">
+                    @foreach (var option in LegacyReferenceData.DietTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Menu Duration/Type</div>
+                <InputSelect class="input" @bind-Value="MenuDurationType">
+                    @foreach (var option in LegacyReferenceData.MenuDurationTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Meal Served Format</div>
+                <InputSelect class="input" @bind-Value="MealServedFormat">
+                    @foreach (var option in LegacyReferenceData.MealServedFormats)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Cycle</div>
+                <InputSelect class="input" @bind-Value="Cycle">
+                    @foreach (var option in LegacyReferenceData.Cycles)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <div class="small muted">Nutrition Advisor</div>
+                <InputSelect class="input" @bind-Value="NutritionAdvisor">
+                    @foreach (var option in LegacyReferenceData.NutritionAdvisors)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <label><div class="small muted">Start Date</div><InputDate class="input" @bind-Value="StartDate" /></label>
+            <label>
+                <div class="small muted">Service Pattern</div>
+                <InputSelect class="input" @bind-Value="DaysPerWeek">
+                    <option value="5">5-day</option>
+                    <option value="7">7-day</option>
+                </InputSelect>
+            </label>
+        </div>
+
+        <div class="checkbox-row" style="margin-top: 14px">
+            @foreach (var tag in LegacyReferenceData.MenuTags)
+            {
+                var currentTag = tag;
+                <label class="checkbox-chip">
+                    <input type="checkbox" checked="@SelectedMenuTags.Contains(currentTag)" @onchange="eventArgs => SetMenuTag(currentTag, eventArgs.Value is bool value && value)" />
+                    <span>Menu Tag: @currentTag</span>
+                </label>
+            }
+        </div>
+
+        <div class="hero-actions" style="margin-top: 16px">
+            <button type="button" class="button" @onclick="CreateDraft">Save</button>
+            <a class="ghost-button" href="/menus">Cancel</a>
+        </div>
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private string MenuName { get; set; } = "Weekly Menu";
+    private string ContractName { get; set; } = LegacyReferenceData.ContractNames[0];
+    private string ProgramType { get; set; } = "Congregate";
+    private string MealType { get; set; } = "Lunch";
+    private string MenuCoverage { get; set; } = "Lunch only";
+    private string DietType { get; set; } = "Regular";
+    private string MenuDurationType { get; set; } = "Regular";
+    private string MealServedFormat { get; set; } = "Hot";
+    private string Cycle { get; set; } = "Spring/Summer";
+    private string NutritionAdvisor { get; set; } = LegacyReferenceData.NutritionAdvisors[0];
+    private List<string> SelectedMenuTags { get; set; } = [];
+    private DateTime StartDate { get; set; } = StartOfServiceWeek(DateTime.Today);
+    private int DaysPerWeek { get; set; } = 5;
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+    private string CreatedBy => IsProvider ? AppMode.ProviderContract : "Menu staff";
+
+    protected override void OnParametersSet()
+    {
+        if (IsProvider)
+        {
+            ContractName = AppMode.ProviderContract;
+        }
+    }
+
+    private static DateTime StartOfServiceWeek(DateTime date)
+    {
+        var daysSinceMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.Date.AddDays(-daysSinceMonday);
+    }
+
+    private void SetMenuTag(string tag, bool selected)
+    {
+        if (selected && !SelectedMenuTags.Contains(tag))
+        {
+            SelectedMenuTags.Add(tag);
+        }
+        else if (!selected)
+        {
+            SelectedMenuTags.Remove(tag);
+        }
+    }
+
+    private void CreateDraft()
+    {
+        Drafts.Set(new MenuCreateRequest
+        {
+            Name = MenuName,
+            ContractName = ContractName,
+            ProgramType = ProgramType,
+            MealType = MealType,
+            MenuCoverage = MenuCoverage,
+            DietType = DietType,
+            MenuDurationType = MenuDurationType,
+            MealServedFormat = MealServedFormat,
+            MenuTags = [.. SelectedMenuTags],
+            Cycle = Cycle,
+            CycleStartDate = StartDate,
+            CycleEndDate = StartDate.AddMonths(Cycle is "Spring/Summer" or "Fall/Winter" or "Fiscal Year" ? 6 : 3),
+            MenuFormat = "Weekly",
+            Status = "Draft",
+            StatusDate = StartDate,
+            SubmittedTo = "NYC Aging",
+            NutritionAdvisor = NutritionAdvisor,
+            CreatedBy = CreatedBy,
+            StartDate = StartDate,
+            EndDate = StartDate.AddDays(DaysPerWeek - 1),
+            DaysPerWeek = DaysPerWeek,
+            CycleWeek = 1,
+            Contracts = [ContractName],
+            SubmittedPrograms = [ProgramType]
+        });
+        Navigation.NavigateTo("/menus/new");
+    }
+}

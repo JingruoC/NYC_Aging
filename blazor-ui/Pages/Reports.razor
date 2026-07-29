@@ -1,0 +1,247 @@
+@page "/reports"
+@inject AppModeService AppMode
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Reports</div>
+                <h2 style="margin-bottom: 6px">Report catalog</h2>
+                <p class="muted" style="margin: 0">@ReportPageDescription</p>
+            </div>
+            @if (IsProvider)
+            {
+                <span class="status-badge">@AppMode.ProviderContract</span>
+            }
+        </div>
+    </section>
+
+    <div class="columns reports-layout">
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h3 style="margin-bottom: 6px">Reports</h3>
+                    <p class="muted" style="margin: 0">@ReportListDescription</p>
+                </div>
+            </div>
+            <div class="admin-table-wrap" style="margin-top: 14px">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Report Name</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th>Selection</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var report in VisibleReports)
+                        {
+                            var isSelected = SelectedReport == report.Key;
+                            <tr class="@(isSelected ? "active-row selected-report-row" : "")">
+                                <td><strong>@report.Name</strong></td>
+                                <td>@report.Group</td>
+                                <td>@report.Description</td>
+                                <td>
+                                    @if (isSelected)
+                                    {
+                                        <span class="status-badge brand">Selected</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="secondary-button tiny-button" @onclick="() => SelectReport(report.Key)">Select</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            @if (CurrentReport is null)
+            {
+                <div class="empty-state" style="margin-top: 14px; text-align: left">
+                    Select a report from the catalog to enter its print or export fields.
+                </div>
+            }
+            else
+            {
+                <div class="section-header">
+                    <div>
+                        <h3 style="margin-bottom: 6px">@CurrentReport.Name</h3>
+                        <p class="muted" style="margin: 0">@CurrentReport.Description</p>
+                    </div>
+                </div>
+
+                <div class="report-form compact-form" style="margin-top: 14px">
+                    @if (CurrentReport.NeedsContractId)
+                    {
+                        <label>
+                            <div class="small muted">Contract ID</div>
+                            @if (IsProvider)
+                            {
+                                <input class="input" value="@ContractId" disabled />
+                            }
+                            else
+                            {
+                                <InputSelect class="input" @bind-Value="ContractId">
+                                    @foreach (var option in LegacyReferenceData.ContractNames)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </InputSelect>
+                            }
+                        </label>
+                    }
+                    @if (CurrentReport.NeedsMenuId)
+                    {
+                        <label>
+                            <div class="small muted">Menu ID</div>
+                            <InputText class="input" @bind-Value="MenuId" />
+                        </label>
+                    }
+                    @if (CurrentReport.NeedsDate)
+                    {
+                        <label>
+                            <div class="small muted">Date</div>
+                            <InputDate class="input" @bind-Value="PrintDate" />
+                        </label>
+                    }
+                    @if (CurrentReport.NeedsYearMonth)
+                    {
+                        <label>
+                            <div class="small muted">Year Month (YYYY-MM)</div>
+                            <InputText class="input" @bind-Value="YearMonth" />
+                        </label>
+                    }
+                    @if (CurrentReport.NeedsMealType)
+                    {
+                        <label>
+                            <div class="small muted">Meal Type</div>
+                            <InputSelect class="input" @bind-Value="MealType">
+                                @foreach (var option in LegacyReferenceData.MealTypes)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    }
+                    <label>
+                        <div class="small muted">Export Format</div>
+                        <InputSelect class="input" @bind-Value="ExportFormat">
+                            @foreach (var option in CurrentReport.ExportFormats)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+                <div class="hero-actions" style="margin-top: 16px">
+                    <button type="button" class="button" @onclick="ViewReport">View Report</button>
+                    <button type="button" class="ghost-button" @onclick="ResetReport">Reset</button>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <div class="empty-state" style="margin-top: 16px; text-align: left">@Message</div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private string SelectedReport { get; set; } = string.Empty;
+    private string ContractId { get; set; } = LegacyReferenceData.ContractNames[0];
+    private string MenuId { get; set; } = string.Empty;
+    private DateTime PrintDate { get; set; } = DateTime.Today;
+    private string YearMonth { get; set; } = DateTime.Today.ToString("yyyy-MM");
+    private string MealType { get; set; } = "Lunch";
+    private string ExportFormat { get; set; } = "PDF";
+    private string? Message { get; set; }
+
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+
+    private string ReportPageDescription => IsProvider
+        ? "Print daily menus, monthly calendars, nutrition labels, and related menu output for your contract."
+        : "Select a report, enter the required fields, then view or export the result.";
+
+    private string ReportListDescription => IsProvider
+        ? "Menu printing reports available to providers and caterers."
+        : "Menu Related Report and Administrative Related Report definitions.";
+
+    private IEnumerable<LegacyReportDefinition> VisibleReports => IsProvider
+        ? LegacyReferenceData.Reports.Where(report => report.Group == "Menu Related Report")
+        : LegacyReferenceData.Reports;
+
+    private LegacyReportDefinition? CurrentReport =>
+        VisibleReports.FirstOrDefault(report => report.Key == SelectedReport);
+
+    protected override void OnParametersSet()
+    {
+        if (IsProvider)
+        {
+            ContractId = AppMode.ProviderContract;
+        }
+
+        if (!VisibleReports.Any(report => report.Key == SelectedReport))
+        {
+            SelectedReport = string.Empty;
+            ExportFormat = "PDF";
+        }
+    }
+
+    private void SelectReport(string key)
+    {
+        SelectedReport = key;
+        ExportFormat = CurrentReport?.ExportFormats.FirstOrDefault() ?? "PDF";
+        Message = null;
+    }
+
+    private void ViewReport()
+    {
+        if (CurrentReport is null)
+        {
+            Message = "Select a report before viewing.";
+            return;
+        }
+
+        var details = new List<string> { CurrentReport.Name, ExportFormat };
+        if (CurrentReport.NeedsContractId)
+        {
+            details.Add(ContractId);
+        }
+        if (CurrentReport.NeedsMenuId && !string.IsNullOrWhiteSpace(MenuId))
+        {
+            details.Add($"Menu ID {MenuId}");
+        }
+        if (CurrentReport.NeedsDate)
+        {
+            details.Add(PrintDate.ToString("MMM d, yyyy"));
+        }
+        if (CurrentReport.NeedsYearMonth)
+        {
+            details.Add(YearMonth);
+        }
+        if (CurrentReport.NeedsMealType)
+        {
+            details.Add(MealType);
+        }
+
+        Message = $"Report ready: {string.Join(" · ", details)}.";
+    }
+
+    private void ResetReport()
+    {
+        ContractId = IsProvider ? AppMode.ProviderContract : LegacyReferenceData.ContractNames[0];
+        MenuId = string.Empty;
+        PrintDate = DateTime.Today;
+        YearMonth = DateTime.Today.ToString("yyyy-MM");
+        MealType = "Lunch";
+        ExportFormat = CurrentReport?.ExportFormats.FirstOrDefault() ?? "PDF";
+        Message = null;
+    }
+}

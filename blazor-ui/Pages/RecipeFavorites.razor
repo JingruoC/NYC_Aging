@@ -1,0 +1,58 @@
+@page "/recipes/favorites"
+@inject PythonApiClient Api
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Recipe</div>
+                <h2 style="margin-bottom: 6px">My Favorites</h2>
+                <p class="muted" style="margin: 0">Favorite recipes saved for faster menu building.</p>
+            </div>
+            <div class="hero-actions">
+                <a class="ghost-button" href="/recipes/home">Recipe Home</a>
+                <a class="button" href="/recipes">Recipe List</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="table-list">
+            @foreach (var recipe in FavoriteRecipes)
+            {
+                <div class="table-row recipe-table-row">
+                    <div class="table-main">
+                        <strong>@recipe.RecipeName</strong>
+                        <div class="muted small">@recipe.MealType · @recipe.Category · @recipe.ServingSize</div>
+                        <div class="tag-list">
+                            @foreach (var tag in recipe.Tags.Concat(recipe.NutrientClaims).Distinct().Take(5))
+                            {
+                                <span class="tag-chip">@tag</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="table-metric">@recipe.Calories kcal</div>
+                    <div class="table-metric">@recipe.SodiumMg mg</div>
+                    <div class="table-metric">@recipe.ProteinG g</div>
+                    <div class="table-metric">@recipe.FiberG g</div>
+                    <div class="table-metric">
+                        <a class="button tiny-button" href="@($"/recipes/{recipe.RecipeId}")">View</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private List<RecipeDto> Recipes { get; set; } = [];
+
+    private IEnumerable<RecipeDto> FavoriteRecipes => Recipes
+        .Where(recipe => recipe.IsFavorite)
+        .OrderBy(recipe => recipe.RecipeName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Recipes = await Api.GetRecipesAsync(true);
+    }
+}

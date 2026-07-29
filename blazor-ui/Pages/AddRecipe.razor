@@ -1,0 +1,1100 @@
+@page "/recipes/new"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Recipe</div>
+                <h2 style="margin-bottom: 6px">Add Recipe</h2>
+                <p class="muted" style="margin: 0">Submit a full recipe, recipe nutrition analysis, or pre-prepared product label for review.</p>
+            </div>
+            <div class="hero-actions">
+                <span class="status-badge warn">Pending review after submit</span>
+                <a class="ghost-button" href="/recipes">Recipe List</a>
+            </div>
+        </div>
+    </section>
+
+    <EditForm Model="_form" OnSubmit="SubmitRecipe">
+        <div class="recipe-submission-layout">
+            <aside class="section recipe-form-nav-panel">
+                <div class="eyebrow">Recipe Entry</div>
+                <h3 style="margin: 0">Form sections</h3>
+                <div class="recipe-form-nav">
+                    <a class="recipe-form-nav-item" href="#contact-section">
+                        <strong>Contact</strong>
+                        <span>Program or caterer name, contact person, and preferred email.</span>
+                    </a>
+                    <a class="recipe-form-nav-item" href="#recipe-type-section">
+                        <strong>Recipe type</strong>
+                        <span>Full recipe, nutrition analysis, or product label.</span>
+                    </a>
+                    @if (IsSubmissionType(FullRecipeType))
+                    {
+                        <a class="recipe-form-nav-item" href="#source-section">
+                            <strong>Recipe source</strong>
+                            <span>Source, URL, and recipe file.</span>
+                        </a>
+                    }
+                    <a class="recipe-form-nav-item active" href="#details-section">
+                        <strong>@CurrentSubmissionShortLabel</strong>
+                        <span>@CurrentSubmissionNavDescription</span>
+                    </a>
+                    <a class="recipe-form-nav-item" href="#catalog-section">
+                        <strong>Catalog classification</strong>
+                        <span>Meal type and category.</span>
+                    </a>
+                    <a class="recipe-form-nav-item" href="#review-section">
+                        <strong>Review</strong>
+                        <span>Check and submit for review.</span>
+                    </a>
+                </div>
+            </aside>
+
+            <div class="grid" style="gap: 18px">
+                @if (_errors.Any())
+                {
+                    <section class="section validation-panel">
+                        <strong>Please review these fields</strong>
+                        <ul class="plain-list">
+                            @foreach (var error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </section>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <section class="section validation-panel success">
+                        @_message
+                    </section>
+                }
+
+                <section class="section" id="contact-section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Contact</div>
+                            <h3 style="margin-bottom: 6px">Submitter information</h3>
+                        </div>
+                    </div>
+                    <div class="form-grid-three">
+                        <label class="field">
+                            <span>Program or Caterer Name <span class="required">*</span></span>
+                            <InputText class="input" @bind-Value="_form.ProgramOrCatererName" />
+                        </label>
+                        <label class="field">
+                            <span>Contact Person <span class="required">*</span></span>
+                            <InputText class="input" @bind-Value="_form.ContactPerson" />
+                        </label>
+                        <label class="field">
+                            <span>Preferred E-mail Address <span class="required">*</span></span>
+                            <InputText class="input" @bind-Value="_form.EmailAddress" />
+                        </label>
+                    </div>
+                </section>
+
+                <section class="section" id="recipe-type-section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Recipe Type</div>
+                            <h3 style="margin-bottom: 6px">What type of recipe are you submitting?</h3>
+                        </div>
+                    </div>
+                    <div class="choice-card-grid">
+                        @foreach (var option in SubmissionTypes)
+                        {
+                            <button type="button"
+                                    class="choice-card @(IsSubmissionType(option.Key) ? "active" : "")"
+                                    @onclick="() => SetSubmissionType(option.Key)">
+                                <strong>@option.Label</strong>
+                                <span>@option.Description</span>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="form-grid-two" style="margin-top: 16px">
+                        <label class="field">
+                            <span>Can this recipe be made public? <span class="required">*</span></span>
+                            <InputSelect class="input" @bind-Value="_form.IsPublic">
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </InputSelect>
+                        </label>
+                    </div>
+                </section>
+
+                @if (IsSubmissionType(FullRecipeType))
+                {
+                    <section class="section" id="source-section">
+                        <div class="section-header">
+                            <div>
+                                <div class="eyebrow">Recipe Source</div>
+                                <h3 style="margin-bottom: 6px">Where is the recipe from?</h3>
+                            </div>
+                        </div>
+                        <div class="form-grid-two">
+                            <label class="field">
+                                <span>Recipe source <span class="required">*</span></span>
+                                <InputSelect class="input" @bind-Value="_form.RecipeSource">
+                                    @foreach (var option in RecipeSourceOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field">
+                                <span>Please provide the recipe URL</span>
+                                <InputText class="input" @bind-Value="_form.RecipeUrl" />
+                            </label>
+                            <div class="field full-span">
+                                <span>Please upload recipe file (include ingredients and directions)</span>
+                                <div class="file-upload-control">
+                                    <label class="file-upload-button" for="recipe-file-input">Choose files</label>
+                                    <span class="file-upload-name">@FileListText(_recipeFileNames)</span>
+                                    <InputFile id="recipe-file-input" class="file-upload-input" OnChange="CaptureRecipeFiles" multiple />
+                                </div>
+                                <span class="muted small">Up to 5 files. Accepted source examples: Word, Excel, PPT, PDF, image, video, or audio.</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section" id="details-section">
+                        <div class="section-header">
+                            <div>
+                                <div class="eyebrow">Full Recipe</div>
+                                <h3 style="margin-bottom: 6px">Ingredients and directions</h3>
+                            </div>
+                        </div>
+                        <div class="form-grid-two">
+                            <label class="field">
+                                <span>Recipe Name <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.RecipeName" />
+                            </label>
+                            <label class="field">
+                                <span>Recipe Yield <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.RecipeYield" />
+                            </label>
+                            <label class="field">
+                                <span>Serving Size <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.ServingSize" placeholder="Example: 1 cup, 6 oz, 1 sandwich" />
+                            </label>
+                            <label class="field full-span">
+                                <span>Ingredient List <span class="required">*</span></span>
+                                <InputTextArea class="input recipe-textarea" @bind-Value="_form.IngredientList" placeholder="Include ingredient type or form, quantity, and unit. Example: Canned Tomato Sauce - 1 #10 can" />
+                            </label>
+                            <label class="field full-span">
+                                <span>Directions <span class="required">*</span></span>
+                                <InputTextArea class="input recipe-textarea" @bind-Value="_form.Directions" />
+                            </label>
+                            <label class="field full-span">
+                                <span>Comments (optional)</span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.Comments" />
+                            </label>
+                        </div>
+                    </section>
+                }
+
+                @if (IsSubmissionType(NutritionAnalysisType))
+                {
+                    <section class="section" id="details-section">
+                        <div class="section-header">
+                            <div>
+                                <div class="eyebrow">Recipe Nutrition Analysis</div>
+                                <h3 style="margin-bottom: 6px">Nutrition analysis details</h3>
+                            </div>
+                        </div>
+                        <div class="form-grid-two">
+                            <label class="field">
+                                <span>Recipe Name <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.AnalysisRecipeName" />
+                            </label>
+                            <label class="field">
+                                <span>Recipe Yield <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.AnalysisRecipeYield" />
+                            </label>
+                            <label class="field">
+                                <span>Serving Size <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.AnalysisServingSize" placeholder="Example: 1 cup, 6 oz, 1 sandwich" />
+                            </label>
+                        </div>
+                        <div class="field-group-title">Nutrition Facts panel values</div>
+                        <div class="nutrition-input-grid">
+                            <label class="field">
+                                <span>Calories (kcal) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisCalories" />
+                            </label>
+                            <label class="field">
+                                <span>Total Fat (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisTotalFat" />
+                            </label>
+                            <label class="field">
+                                <span>Saturated Fat (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisSaturatedFat" />
+                            </label>
+                            <label class="field">
+                                <span>Trans Fat (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisTransFat" />
+                            </label>
+                            <label class="field">
+                                <span>Cholesterol (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisCholesterol" />
+                            </label>
+                            <label class="field">
+                                <span>Sodium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisSodium" />
+                            </label>
+                            <label class="field">
+                                <span>Total Carbohydrate (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisTotalCarbohydrate" />
+                            </label>
+                            <label class="field">
+                                <span>Dietary Fiber (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisDietaryFiber" />
+                            </label>
+                            <label class="field">
+                                <span>Total Sugars (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisTotalSugars" />
+                            </label>
+                            <label class="field">
+                                <span>Added Sugars (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisAddedSugars" />
+                            </label>
+                            <label class="field">
+                                <span>Protein (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisProtein" />
+                            </label>
+                            <label class="field">
+                                <span>Vitamin D (mcg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisVitaminD" />
+                            </label>
+                            <label class="field">
+                                <span>Calcium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisCalcium" />
+                            </label>
+                            <label class="field">
+                                <span>Iron (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisIron" />
+                            </label>
+                            <label class="field">
+                                <span>Potassium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AnalysisPotassium" />
+                            </label>
+                        </div>
+                        <div class="form-grid-two" style="margin-top: 12px">
+                            <div class="field">
+                                <span>Upload Recipe Nutrition Facts Panel <span class="required">*</span></span>
+                                <div class="file-upload-control">
+                                    <label class="file-upload-button" for="analysis-file-input">Choose file</label>
+                                    <span class="file-upload-name">@FileListText(_analysisFileNames)</span>
+                                    <InputFile id="analysis-file-input" class="file-upload-input" OnChange="CaptureAnalysisFiles" />
+                                </div>
+                            </div>
+                            <label class="field full-span">
+                                <span>Vegetables Per Serving <span class="required">*</span></span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.VegetablesPerServing" placeholder="List each vegetable and amount per serving in cups or ounces. If none, enter 0." />
+                            </label>
+                            <label class="field full-span">
+                                <span>Plant-Based Protein Per Serving <span class="required">*</span></span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.PlantProteinPerServing" placeholder="List each plant-based protein and amount per serving in cups or ounces. If none, enter 0." />
+                            </label>
+                            <label class="field full-span">
+                                <span>Fruit Per Serving <span class="required">*</span></span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.FruitPerServing" placeholder="List each fruit and amount per serving in cups or ounces. If none, enter 0." />
+                            </label>
+                            <label class="field full-span">
+                                <span>Comments (optional)</span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.AnalysisComments" />
+                            </label>
+                        </div>
+                    </section>
+                }
+
+                @if (IsSubmissionType(ProductLabelType))
+                {
+                    <section class="section" id="details-section">
+                        <div class="section-header">
+                            <div>
+                                <div class="eyebrow">Pre-Prepared Product</div>
+                                <h3 style="margin-bottom: 6px">Product label details</h3>
+                            </div>
+                        </div>
+                        <div class="form-grid-three">
+                            <label class="field">
+                                <span>Product Name <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.ProductName" />
+                            </label>
+                            <label class="field">
+                                <span>Manufacturer <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.Manufacturer" />
+                            </label>
+                            <label class="field">
+                                <span>Servings per Container</span>
+                                <InputText class="input" @bind-Value="_form.ServingsPerContainer" placeholder="If available" />
+                            </label>
+                            <label class="field">
+                                <span>Serving Size <span class="required">*</span></span>
+                                <InputText class="input" @bind-Value="_form.ProductServingSize" placeholder="Include units" />
+                            </label>
+                        </div>
+                        <div class="field-group-title">Nutrition Facts panel values</div>
+                        <div class="nutrition-input-grid">
+                            <label class="field">
+                                <span>Calories (kcal) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.ProductCalories" />
+                            </label>
+                            <label class="field">
+                                <span>Total Fat (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.TotalFat" />
+                            </label>
+                            <label class="field">
+                                <span>Saturated Fat (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.SaturatedFat" />
+                            </label>
+                            <label class="field">
+                                <span>Trans Fat (g)</span>
+                                <InputNumber class="input" @bind-Value="_form.TransFat" />
+                            </label>
+                            <label class="field">
+                                <span>Cholesterol (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Cholesterol" />
+                            </label>
+                            <label class="field">
+                                <span>Sodium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Sodium" />
+                            </label>
+                            <label class="field">
+                                <span>Total Carbohydrate (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.TotalCarbohydrate" />
+                            </label>
+                            <label class="field">
+                                <span>Dietary Fiber (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.DietaryFiber" />
+                            </label>
+                            <label class="field">
+                                <span>Total Sugars (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.TotalSugars" />
+                            </label>
+                            <label class="field">
+                                <span>Added Sugars (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.AddedSugars" />
+                            </label>
+                            <label class="field">
+                                <span>Protein (g) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Protein" />
+                            </label>
+                            <label class="field">
+                                <span>Vitamin D (mcg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.VitaminD" />
+                            </label>
+                            <label class="field">
+                                <span>Calcium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Calcium" />
+                            </label>
+                            <label class="field">
+                                <span>Iron (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Iron" />
+                            </label>
+                            <label class="field">
+                                <span>Potassium (mg) <span class="required">*</span></span>
+                                <InputNumber class="input" @bind-Value="_form.Potassium" />
+                            </label>
+                        </div>
+                        <div class="form-grid-two" style="margin-top: 12px">
+                            <div class="field full-span">
+                                <span>Upload Nutrition Facts Panel and Ingredient List <span class="required">*</span></span>
+                                <div class="file-upload-control">
+                                    <label class="file-upload-button" for="product-file-input">Choose files</label>
+                                    <span class="file-upload-name">@FileListText(_productFileNames)</span>
+                                    <InputFile id="product-file-input" class="file-upload-input" OnChange="CaptureProductFiles" multiple />
+                                </div>
+                                <span class="muted small">Up to 4 files. Accepted source examples: Word, Excel, PPT, PDF, image, video, or audio.</span>
+                            </div>
+                            <label class="field full-span">
+                                <span>Comments (optional)</span>
+                                <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.ProductComments" placeholder="If available, include the product URL here." />
+                            </label>
+                        </div>
+                    </section>
+                }
+
+                <section class="section" id="catalog-section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Catalog Classification</div>
+                            <h3 style="margin-bottom: 6px">Simple Servings fields</h3>
+                            <p class="muted" style="margin: 0">These fields place the submission in the recipe catalog while it waits for review.</p>
+                        </div>
+                    </div>
+                    <div class="form-grid-two">
+                        <label class="field">
+                            <span>Meal type</span>
+                            <InputSelect class="input" @bind-Value="_form.MealType">
+                                @foreach (var option in MealTypeOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">
+                            <span>Category</span>
+                            <InputSelect class="input" @bind-Value="_form.Category">
+                                @foreach (var option in CategoryOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="section" id="review-section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Review</div>
+                            <h3 style="margin-bottom: 6px">Submission summary</h3>
+                        </div>
+                    </div>
+                    <div class="summary-grid recipe-submit-summary">
+                        <div class="summary-card">
+                            <div class="summary-value">@CurrentRecipeNamePreview</div>
+                            <div class="muted small">Recipe or product name</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value">@CurrentSubmissionLabel</div>
+                            <div class="muted small">Submission type</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value">@(_form.IsPublic ? "Yes" : "No")</div>
+                            <div class="muted small">Can be made public</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value">Pending</div>
+                            <div class="muted small">Approval status</div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="button" disabled="@_isSubmitting">@(_isSubmitting ? "Submitting..." : "Submit recipe for review")</button>
+                        <button type="button" class="ghost-button" @onclick="ResetForm" disabled="@_isSubmitting">Clear form</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private const string FullRecipeType = "full-recipe";
+    private const string NutritionAnalysisType = "nutrition-analysis";
+    private const string ProductLabelType = "product-label";
+
+    private readonly RecipeSubmissionForm _form = new();
+    private readonly List<string> _errors = [];
+    private readonly List<string> _recipeFileNames = [];
+    private readonly List<string> _analysisFileNames = [];
+    private readonly List<string> _productFileNames = [];
+    private bool _isSubmitting;
+    private string? _message;
+
+    private static readonly SubmissionOption[] SubmissionTypes =
+    [
+        new(FullRecipeType, "Full recipe with ingredients and directions", "Use for recipes entered from written instructions."),
+        new(NutritionAnalysisType, "Recipe nutrition analysis", "Use when submitting nutrition analysis for an existing recipe."),
+        new(ProductLabelType, "Pre-prepared product label", "Use for packaged or prepared products with a Nutrition Facts panel.")
+    ];
+
+    private static readonly string[] RecipeSourceOptions =
+    [
+        "A recipe created by our organization",
+        "A recipe from the internet",
+        "A printed recipe (book, magazine, handout, etc.)",
+        "Other"
+    ];
+
+    private static readonly SelectOption[] MealTypeOptions =
+    [
+        new("breakfast", "Breakfast"),
+        new("lunch", "Lunch"),
+        new("dinner", "Dinner"),
+        new("snack", "Snack")
+    ];
+
+    private static readonly SelectOption[] CategoryOptions =
+    [
+        new("entree", "Entree"),
+        new("side", "Side"),
+        new("grain", "Grain"),
+        new("fruit", "Fruit"),
+        new("vegetable", "Vegetable"),
+        new("milk", "Milk/Yogurt"),
+        new("appetizer", "Appetizer"),
+        new("condiments", "Condiments"),
+        new("juice", "Juice or Dessert")
+    ];
+
+    private string CurrentSubmissionLabel => SubmissionTypes.First(option => option.Key == _form.SubmissionType).Label;
+
+    private string CurrentSubmissionShortLabel => _form.SubmissionType switch
+    {
+        FullRecipeType => "Recipe details",
+        NutritionAnalysisType => "Nutrition analysis",
+        ProductLabelType => "Product label",
+        _ => "Details"
+    };
+
+    private string CurrentSubmissionNavDescription => _form.SubmissionType switch
+    {
+        FullRecipeType => "Recipe name, yield, serving size, ingredients, and directions.",
+        NutritionAnalysisType => "Nutrition panel and meal component amounts per serving.",
+        ProductLabelType => "Product name, manufacturer, nutrients, and label files.",
+        _ => "Submission details."
+    };
+
+    private string CurrentRecipeNamePreview => _form.SubmissionType switch
+    {
+        FullRecipeType => string.IsNullOrWhiteSpace(_form.RecipeName) ? "Not entered" : _form.RecipeName,
+        NutritionAnalysisType => string.IsNullOrWhiteSpace(_form.AnalysisRecipeName) ? "Not entered" : _form.AnalysisRecipeName,
+        ProductLabelType => string.IsNullOrWhiteSpace(_form.ProductName) ? "Not entered" : _form.ProductName,
+        _ => "Not entered"
+    };
+
+    private bool IsSubmissionType(string type) => _form.SubmissionType.Equals(type, StringComparison.OrdinalIgnoreCase);
+
+    private void SetSubmissionType(string type)
+    {
+        _form.SubmissionType = type;
+        _message = null;
+        _errors.Clear();
+    }
+
+    private async Task SubmitRecipe()
+    {
+        _errors.Clear();
+        _message = null;
+
+        ValidateForm();
+        if (_errors.Any())
+        {
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var created = await Api.CreateRecipeAsync(BuildRecipeRequest());
+            _message = $"Recipe #{created.RecipeId} was submitted for review.";
+            Navigation.NavigateTo($"/recipes/{created.RecipeId}");
+        }
+        catch (Exception ex)
+        {
+            _errors.Add($"The recipe could not be submitted: {ex.Message}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void ValidateForm()
+    {
+        Require(_form.ProgramOrCatererName, "Program or Caterer Name is required.");
+        Require(_form.ContactPerson, "Contact Person is required.");
+        Require(_form.EmailAddress, "Preferred E-mail Address is required.");
+
+        if (IsSubmissionType(FullRecipeType))
+        {
+            Require(_form.RecipeName, "Recipe Name is required.");
+            Require(_form.RecipeYield, "Recipe Yield is required.");
+            Require(_form.ServingSize, "Serving Size is required.");
+            Require(_form.IngredientList, "Ingredient List is required.");
+            Require(_form.Directions, "Directions are required.");
+            if (_form.RecipeSource.Equals("A recipe from the internet", StringComparison.OrdinalIgnoreCase))
+            {
+                Require(_form.RecipeUrl, "Recipe URL is required when the source is from the internet.");
+            }
+            RequireFiles(_recipeFileNames, "Recipe file is required.");
+        }
+
+        if (IsSubmissionType(NutritionAnalysisType))
+        {
+            Require(_form.AnalysisRecipeName, "Recipe Name is required.");
+            Require(_form.AnalysisRecipeYield, "Recipe Yield is required.");
+            Require(_form.AnalysisServingSize, "Serving Size is required.");
+            RequireDecimal(_form.AnalysisCalories, "Calories is required.");
+            RequireDecimal(_form.AnalysisTotalFat, "Total Fat is required.");
+            RequireDecimal(_form.AnalysisSaturatedFat, "Saturated Fat is required.");
+            RequireDecimal(_form.AnalysisTransFat, "Trans Fat is required.");
+            RequireDecimal(_form.AnalysisCholesterol, "Cholesterol is required.");
+            RequireDecimal(_form.AnalysisSodium, "Sodium is required.");
+            RequireDecimal(_form.AnalysisTotalCarbohydrate, "Total Carbohydrate is required.");
+            RequireDecimal(_form.AnalysisDietaryFiber, "Dietary Fiber is required.");
+            RequireDecimal(_form.AnalysisTotalSugars, "Total Sugars is required.");
+            RequireDecimal(_form.AnalysisAddedSugars, "Added Sugars is required.");
+            RequireDecimal(_form.AnalysisProtein, "Protein is required.");
+            RequireDecimal(_form.AnalysisVitaminD, "Vitamin D is required.");
+            RequireDecimal(_form.AnalysisCalcium, "Calcium is required.");
+            RequireDecimal(_form.AnalysisIron, "Iron is required.");
+            RequireDecimal(_form.AnalysisPotassium, "Potassium is required.");
+            RequireFiles(_analysisFileNames, "Recipe Nutrition Facts Panel file is required.");
+            Require(_form.VegetablesPerServing, "Vegetables Per Serving is required. Enter 0 if none.");
+            Require(_form.PlantProteinPerServing, "Plant-Based Protein Per Serving is required. Enter 0 if none.");
+            Require(_form.FruitPerServing, "Fruit Per Serving is required. Enter 0 if none.");
+        }
+
+        if (IsSubmissionType(ProductLabelType))
+        {
+            Require(_form.ProductName, "Product Name is required.");
+            Require(_form.Manufacturer, "Manufacturer is required.");
+            Require(_form.ProductServingSize, "Serving Size is required.");
+            RequireDecimal(_form.ProductCalories, "Calories is required.");
+            RequireDecimal(_form.TotalFat, "Total Fat is required.");
+            RequireDecimal(_form.SaturatedFat, "Saturated Fat is required.");
+            RequireDecimal(_form.Cholesterol, "Cholesterol is required.");
+            RequireDecimal(_form.Sodium, "Sodium is required.");
+            RequireDecimal(_form.TotalCarbohydrate, "Total Carbohydrate is required.");
+            RequireDecimal(_form.DietaryFiber, "Dietary Fiber is required.");
+            RequireDecimal(_form.TotalSugars, "Total Sugars is required.");
+            RequireDecimal(_form.AddedSugars, "Added Sugars is required.");
+            RequireDecimal(_form.Protein, "Protein is required.");
+            RequireDecimal(_form.VitaminD, "Vitamin D is required.");
+            RequireDecimal(_form.Calcium, "Calcium is required.");
+            RequireDecimal(_form.Iron, "Iron is required.");
+            RequireDecimal(_form.Potassium, "Potassium is required.");
+            RequireFiles(_productFileNames, "Nutrition Facts Panel and Ingredient List files are required.");
+        }
+    }
+
+    private void Require(string? value, string message)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _errors.Add(message);
+        }
+    }
+
+    private void RequireDecimal(decimal? value, string message)
+    {
+        if (!value.HasValue)
+        {
+            _errors.Add(message);
+        }
+    }
+
+    private void RequireFiles(IReadOnlyCollection<string> fileNames, string message)
+    {
+        if (fileNames.Count == 0)
+        {
+            _errors.Add(message);
+        }
+    }
+
+    private RecipeCreateRequest BuildRecipeRequest()
+    {
+        var notes = BuildSubmissionNotes();
+        var calories = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisCalories) : IsSubmissionType(ProductLabelType) ? Number(_form.ProductCalories) : 0;
+        var sodium = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisSodium) : IsSubmissionType(ProductLabelType) ? Number(_form.Sodium) : 0;
+        var protein = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisProtein) : IsSubmissionType(ProductLabelType) ? Number(_form.Protein) : 0;
+        var fiber = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisDietaryFiber) : IsSubmissionType(ProductLabelType) ? Number(_form.DietaryFiber) : 0;
+        var fat = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisTotalFat) : IsSubmissionType(ProductLabelType) ? Number(_form.TotalFat) : 0;
+        var calcium = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisCalcium) : IsSubmissionType(ProductLabelType) ? Number(_form.Calcium) : 0;
+        return new RecipeCreateRequest
+        {
+            RecipeName = CurrentRecipeNamePreview == "Not entered" ? "Untitled recipe submission" : CurrentRecipeNamePreview,
+            MealType = _form.MealType,
+            Category = _form.Category,
+            Calories = calories,
+            SodiumMg = sodium,
+            ProteinG = protein,
+            FiberG = fiber,
+            FatG = fat,
+            Tags = BuildTags(),
+            IsApproved = false,
+            Ingredients = BuildIngredientLines(),
+            Instructions = BuildInstructionLines(),
+            ServingSize = GetServingSize(),
+            YieldServings = GetYieldServings(),
+            ScaleNote = string.Join(Environment.NewLine, notes),
+            ContributedBy = _form.ProgramOrCatererName,
+            CreatedOn = DateTime.Today,
+            IsPublic = _form.IsPublic,
+            IsFavorite = false,
+            IsDead = false,
+            NutrientClaims = BuildNutrientClaims(),
+            VitaminCMg = 0,
+            CalciumMg = calcium
+        };
+    }
+
+    private List<string> BuildTags()
+    {
+        var tags = SplitTokens(_form.TagsText);
+        tags.Add("pending review");
+        tags.Add(CurrentSubmissionLabel);
+        tags.Add(_form.Category);
+        return tags.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private List<string> BuildNutrientClaims()
+    {
+        var claims = new List<string>();
+        var sodium = ActiveSodium;
+        var protein = ActiveProtein;
+        var fiber = ActiveFiber;
+        var calcium = ActiveCalcium;
+
+        if (sodium > 0 && sodium <= 140)
+        {
+            claims.Add("low sodium");
+        }
+        if (protein >= 15)
+        {
+            claims.Add("high protein");
+        }
+        if (fiber >= 5)
+        {
+            claims.Add("high fiber");
+        }
+        if (calcium >= 200)
+        {
+            claims.Add("good source of calcium");
+        }
+        return claims;
+    }
+
+    private List<string> BuildIngredientLines()
+    {
+        if (IsSubmissionType(FullRecipeType))
+        {
+            return SplitLines(_form.IngredientList);
+        }
+
+        if (IsSubmissionType(NutritionAnalysisType))
+        {
+            return
+            [
+                $"Nutrition Facts panel files: {FileListText(_analysisFileNames)}",
+                $"Vegetables per serving: {_form.VegetablesPerServing}",
+                $"Plant-based protein per serving: {_form.PlantProteinPerServing}",
+                $"Fruit per serving: {_form.FruitPerServing}"
+            ];
+        }
+
+        return
+        [
+            $"Manufacturer: {_form.Manufacturer}",
+            $"Servings per container: {OptionalText(_form.ServingsPerContainer)}",
+            $"Serving size: {_form.ProductServingSize}",
+            $"Nutrition Facts panel files: {FileListText(_productFileNames)}"
+        ];
+    }
+
+    private List<string> BuildInstructionLines()
+    {
+        if (IsSubmissionType(FullRecipeType))
+        {
+            return SplitLines(_form.Directions);
+        }
+
+        if (IsSubmissionType(NutritionAnalysisType))
+        {
+            return ["Review the submitted recipe nutrition analysis panel."];
+        }
+
+        return ["Review the pre-prepared product label and ingredient list."];
+    }
+
+    private List<string> BuildSubmissionNotes()
+    {
+        var notes = new List<string>
+        {
+            $"Submission type: {CurrentSubmissionLabel}",
+            $"Program or Caterer Name: {_form.ProgramOrCatererName}",
+            $"Contact Person: {_form.ContactPerson}",
+            $"Preferred E-mail Address: {_form.EmailAddress}",
+            $"Can be made public: {(_form.IsPublic ? "Yes" : "No")}"
+        };
+
+        if (IsSubmissionType(FullRecipeType))
+        {
+            notes.Add($"Recipe source: {_form.RecipeSource}");
+            if (!string.IsNullOrWhiteSpace(_form.RecipeUrl))
+            {
+                notes.Add($"Recipe URL: {_form.RecipeUrl}");
+            }
+            notes.Add($"Recipe file names: {FileListText(_recipeFileNames)}");
+            AddOptionalNote(notes, "Comments", _form.Comments);
+        }
+
+        if (IsSubmissionType(NutritionAnalysisType))
+        {
+            notes.Add($"Recipe Yield: {_form.AnalysisRecipeYield}");
+            notes.Add($"Serving Size: {_form.AnalysisServingSize}");
+            AddNutritionPanelNotes(notes, "Recipe Nutrition Analysis", _form.AnalysisCalories, _form.AnalysisTotalFat, _form.AnalysisSaturatedFat, _form.AnalysisTransFat, _form.AnalysisCholesterol, _form.AnalysisSodium, _form.AnalysisTotalCarbohydrate, _form.AnalysisDietaryFiber, _form.AnalysisTotalSugars, _form.AnalysisAddedSugars, _form.AnalysisProtein, _form.AnalysisVitaminD, _form.AnalysisCalcium, _form.AnalysisIron, _form.AnalysisPotassium);
+            notes.Add($"Nutrition Facts Panel file names: {FileListText(_analysisFileNames)}");
+            notes.Add($"Vegetables Per Serving: {_form.VegetablesPerServing}");
+            notes.Add($"Plant-Based Protein Per Serving: {_form.PlantProteinPerServing}");
+            notes.Add($"Fruit Per Serving: {_form.FruitPerServing}");
+            AddOptionalNote(notes, "Comments", _form.AnalysisComments);
+        }
+
+        if (IsSubmissionType(ProductLabelType))
+        {
+            notes.Add($"Manufacturer: {_form.Manufacturer}");
+            notes.Add($"Servings per Container: {OptionalText(_form.ServingsPerContainer)}");
+            notes.Add($"Serving Size: {_form.ProductServingSize}");
+            AddNutritionPanelNotes(notes, "Pre-Prepared Product", _form.ProductCalories, _form.TotalFat, _form.SaturatedFat, _form.TransFat, _form.Cholesterol, _form.Sodium, _form.TotalCarbohydrate, _form.DietaryFiber, _form.TotalSugars, _form.AddedSugars, _form.Protein, _form.VitaminD, _form.Calcium, _form.Iron, _form.Potassium);
+            notes.Add($"Nutrition Facts Panel and Ingredient List file names: {FileListText(_productFileNames)}");
+            AddOptionalNote(notes, "Comments", _form.ProductComments);
+        }
+
+        return notes;
+    }
+
+    private string? GetServingSize() => _form.SubmissionType switch
+    {
+        FullRecipeType => _form.ServingSize,
+        NutritionAnalysisType => _form.AnalysisServingSize,
+        ProductLabelType => _form.ProductServingSize,
+        _ => null
+    };
+
+    private int GetYieldServings() => _form.SubmissionType switch
+    {
+        FullRecipeType => ParsePositiveInt(_form.RecipeYield),
+        NutritionAnalysisType => ParsePositiveInt(_form.AnalysisRecipeYield),
+        ProductLabelType => 1,
+        _ => 1
+    };
+
+    private static int ParsePositiveInt(string value)
+    {
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var result) && result > 0 ? result : 1;
+    }
+
+    private static List<string> SplitLines(string? value) =>
+        (value ?? string.Empty)
+        .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Where(line => !string.IsNullOrWhiteSpace(line))
+        .ToList();
+
+    private static List<string> SplitTokens(string? value) =>
+        (value ?? string.Empty)
+        .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Where(tag => !string.IsNullOrWhiteSpace(tag))
+        .ToList();
+
+    private static void AddOptionalNote(List<string> notes, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            notes.Add($"{label}: {value.Trim()}");
+        }
+    }
+
+    private static void AddNutritionPanelNotes(
+        List<string> notes,
+        string label,
+        decimal? calories,
+        decimal? totalFat,
+        decimal? saturatedFat,
+        decimal? transFat,
+        decimal? cholesterol,
+        decimal? sodium,
+        decimal? totalCarbohydrate,
+        decimal? dietaryFiber,
+        decimal? totalSugars,
+        decimal? addedSugars,
+        decimal? protein,
+        decimal? vitaminD,
+        decimal? calcium,
+        decimal? iron,
+        decimal? potassium)
+    {
+        notes.Add($"{label} - Calories (kcal): {NumberText(calories)}");
+        notes.Add($"{label} - Total Fat (g): {NumberText(totalFat)}");
+        notes.Add($"{label} - Saturated Fat (g): {NumberText(saturatedFat)}");
+        notes.Add($"{label} - Trans Fat (g): {NumberText(transFat)}");
+        notes.Add($"{label} - Cholesterol (mg): {NumberText(cholesterol)}");
+        notes.Add($"{label} - Sodium (mg): {NumberText(sodium)}");
+        notes.Add($"{label} - Total Carbohydrate (g): {NumberText(totalCarbohydrate)}");
+        notes.Add($"{label} - Dietary Fiber (g): {NumberText(dietaryFiber)}");
+        notes.Add($"{label} - Total Sugars (g): {NumberText(totalSugars)}");
+        notes.Add($"{label} - Added Sugars (g): {NumberText(addedSugars)}");
+        notes.Add($"{label} - Protein (g): {NumberText(protein)}");
+        notes.Add($"{label} - Vitamin D (mcg): {NumberText(vitaminD)}");
+        notes.Add($"{label} - Calcium (mg): {NumberText(calcium)}");
+        notes.Add($"{label} - Iron (mg): {NumberText(iron)}");
+        notes.Add($"{label} - Potassium (mg): {NumberText(potassium)}");
+    }
+
+    private decimal ActiveSodium => IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisSodium) : IsSubmissionType(ProductLabelType) ? Number(_form.Sodium) : 0;
+
+    private decimal ActiveProtein => IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisProtein) : IsSubmissionType(ProductLabelType) ? Number(_form.Protein) : 0;
+
+    private decimal ActiveFiber => IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisDietaryFiber) : IsSubmissionType(ProductLabelType) ? Number(_form.DietaryFiber) : 0;
+
+    private decimal ActiveCalcium => IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisCalcium) : IsSubmissionType(ProductLabelType) ? Number(_form.Calcium) : 0;
+
+    private static decimal Number(decimal? value) => value ?? 0;
+
+    private static string NumberText(decimal? value) => value.HasValue ? value.Value.ToString("0.##") : "Not entered";
+
+    private static string OptionalText(string? value) => string.IsNullOrWhiteSpace(value) ? "Not entered" : value.Trim();
+
+    private void ResetForm()
+    {
+        _form.Reset();
+        _recipeFileNames.Clear();
+        _analysisFileNames.Clear();
+        _productFileNames.Clear();
+        _errors.Clear();
+        _message = null;
+    }
+
+    private void CaptureRecipeFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _recipeFileNames, 5);
+
+    private void CaptureAnalysisFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _analysisFileNames, 1);
+
+    private void CaptureProductFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _productFileNames, 4);
+
+    private static void CaptureFileNames(InputFileChangeEventArgs args, List<string> target, int maxFiles)
+    {
+        target.Clear();
+        target.AddRange(args.GetMultipleFiles(maxFiles).Select(file => file.Name));
+    }
+
+    private static string FileListText(IReadOnlyCollection<string> fileNames) =>
+        fileNames.Count == 0 ? "No file selected" : string.Join(", ", fileNames);
+
+    private sealed record SubmissionOption(string Key, string Label, string Description);
+
+    private sealed record SelectOption(string Value, string Label);
+
+    private sealed class RecipeSubmissionForm
+    {
+        public string ProgramOrCatererName { get; set; } = string.Empty;
+        public string ContactPerson { get; set; } = string.Empty;
+        public string EmailAddress { get; set; } = string.Empty;
+        public string SubmissionType { get; set; } = FullRecipeType;
+        public bool IsPublic { get; set; } = true;
+        public string TagsText { get; set; } = string.Empty;
+        public string RecipeSource { get; set; } = RecipeSourceOptions[0];
+        public string RecipeUrl { get; set; } = string.Empty;
+        public string RecipeName { get; set; } = string.Empty;
+        public string RecipeYield { get; set; } = string.Empty;
+        public string ServingSize { get; set; } = string.Empty;
+        public string IngredientList { get; set; } = string.Empty;
+        public string Directions { get; set; } = string.Empty;
+        public string Comments { get; set; } = string.Empty;
+        public string AnalysisRecipeName { get; set; } = string.Empty;
+        public string AnalysisRecipeYield { get; set; } = string.Empty;
+        public string AnalysisServingSize { get; set; } = string.Empty;
+        public decimal? AnalysisCalories { get; set; }
+        public decimal? AnalysisTotalFat { get; set; }
+        public decimal? AnalysisSaturatedFat { get; set; }
+        public decimal? AnalysisTransFat { get; set; }
+        public decimal? AnalysisCholesterol { get; set; }
+        public decimal? AnalysisSodium { get; set; }
+        public decimal? AnalysisTotalCarbohydrate { get; set; }
+        public decimal? AnalysisDietaryFiber { get; set; }
+        public decimal? AnalysisTotalSugars { get; set; }
+        public decimal? AnalysisAddedSugars { get; set; }
+        public decimal? AnalysisProtein { get; set; }
+        public decimal? AnalysisVitaminD { get; set; }
+        public decimal? AnalysisCalcium { get; set; }
+        public decimal? AnalysisIron { get; set; }
+        public decimal? AnalysisPotassium { get; set; }
+        public string VegetablesPerServing { get; set; } = string.Empty;
+        public string PlantProteinPerServing { get; set; } = string.Empty;
+        public string FruitPerServing { get; set; } = string.Empty;
+        public string AnalysisComments { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public string Manufacturer { get; set; } = string.Empty;
+        public string ServingsPerContainer { get; set; } = string.Empty;
+        public string ProductServingSize { get; set; } = string.Empty;
+        public decimal? ProductCalories { get; set; }
+        public decimal? TotalFat { get; set; }
+        public decimal? SaturatedFat { get; set; }
+        public decimal? TransFat { get; set; }
+        public decimal? Cholesterol { get; set; }
+        public decimal? Sodium { get; set; }
+        public decimal? TotalCarbohydrate { get; set; }
+        public decimal? DietaryFiber { get; set; }
+        public decimal? TotalSugars { get; set; }
+        public decimal? AddedSugars { get; set; }
+        public decimal? Protein { get; set; }
+        public decimal? VitaminD { get; set; }
+        public decimal? Calcium { get; set; }
+        public decimal? Iron { get; set; }
+        public decimal? Potassium { get; set; }
+        public string ProductComments { get; set; } = string.Empty;
+        public string MealType { get; set; } = "lunch";
+        public string Category { get; set; } = "entree";
+
+        public void Reset()
+        {
+            ProgramOrCatererName = string.Empty;
+            ContactPerson = string.Empty;
+            EmailAddress = string.Empty;
+            SubmissionType = FullRecipeType;
+            IsPublic = true;
+            TagsText = string.Empty;
+            RecipeSource = RecipeSourceOptions[0];
+            RecipeUrl = string.Empty;
+            RecipeName = string.Empty;
+            RecipeYield = string.Empty;
+            ServingSize = string.Empty;
+            IngredientList = string.Empty;
+            Directions = string.Empty;
+            Comments = string.Empty;
+            AnalysisRecipeName = string.Empty;
+            AnalysisRecipeYield = string.Empty;
+            AnalysisServingSize = string.Empty;
+            AnalysisCalories = null;
+            AnalysisTotalFat = null;
+            AnalysisSaturatedFat = null;
+            AnalysisTransFat = null;
+            AnalysisCholesterol = null;
+            AnalysisSodium = null;
+            AnalysisTotalCarbohydrate = null;
+            AnalysisDietaryFiber = null;
+            AnalysisTotalSugars = null;
+            AnalysisAddedSugars = null;
+            AnalysisProtein = null;
+            AnalysisVitaminD = null;
+            AnalysisCalcium = null;
+            AnalysisIron = null;
+            AnalysisPotassium = null;
+            VegetablesPerServing = string.Empty;
+            PlantProteinPerServing = string.Empty;
+            FruitPerServing = string.Empty;
+            AnalysisComments = string.Empty;
+            ProductName = string.Empty;
+            Manufacturer = string.Empty;
+            ServingsPerContainer = string.Empty;
+            ProductServingSize = string.Empty;
+            ProductCalories = null;
+            TotalFat = null;
+            SaturatedFat = null;
+            TransFat = null;
+            Cholesterol = null;
+            Sodium = null;
+            TotalCarbohydrate = null;
+            DietaryFiber = null;
+            TotalSugars = null;
+            AddedSugars = null;
+            Protein = null;
+            VitaminD = null;
+            Calcium = null;
+            Iron = null;
+            Potassium = null;
+            ProductComments = string.Empty;
+            MealType = "lunch";
+            Category = "entree";
+        }
+    }
+}

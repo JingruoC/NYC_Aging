@@ -1,0 +1,283 @@
+@page "/menus"
+@page "/menus/list"
+@inject PythonApiClient Api
+@inject AppModeService AppMode
+@inject MenuDraftService Drafts
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Menus</div>
+                <h2 style="margin-bottom: 6px">@(IsProvider ? "My submitted and approved menus" : "Menu list")</h2>
+                <p class="muted" style="margin: 0">@MenuPageDescription</p>
+            </div>
+            <div class="hero-actions">
+                @if (IsAdmin)
+                {
+                    <a class="button" href="/menus/new/blank">Add New</a>
+                    <a class="secondary-button" href="/menus/new/sample">Sample Menus</a>
+                }
+                else
+                {
+                    <span class="status-badge brand">@AppMode.ProviderContract</span>
+                    <a class="button" href="/menus/new/blank">Build Menu</a>
+                    <a class="secondary-button" href="/menus/drafts">My Drafts</a>
+                    <a class="ghost-button" href="/menus/new/sample">Sample Menus</a>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="report-form">
+            <label>
+                <div class="small muted">Search by MenuID or Menu Name</div>
+                <InputText class="input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Menu ID or name" />
+            </label>
+            <label>
+                <div class="small muted">Menu Status</div>
+                <InputSelect class="input" @bind-Value="StatusFilter">
+                    <option value="@AllMode">All</option>
+                    @foreach (var status in StatusOptions)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </InputSelect>
+            </label>
+            @if (IsAdmin)
+            {
+                <label>
+                    <div class="small muted">Contract Name</div>
+                    <InputSelect class="input" @bind-Value="ContractFilter">
+                        <option value="@AllMode">All</option>
+                        @foreach (var contract in LegacyReferenceData.ContractNames)
+                        {
+                            <option value="@contract">@contract</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Nutrition Advisor</div>
+                    <InputSelect class="input" @bind-Value="NutritionAdvisorFilter">
+                        <option value="@AllMode">All</option>
+                        @foreach (var advisor in LegacyReferenceData.NutritionAdvisors)
+                        {
+                            <option value="@advisor">@advisor</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Program Type</div>
+                    <InputSelect class="input" @bind-Value="ProgramTypeFilter">
+                        <option value="@AllMode">All</option>
+                        @foreach (var programType in LegacyReferenceData.ProgramTypes)
+                        {
+                            <option value="@programType">@programType</option>
+                        }
+                    </InputSelect>
+                </label>
+            }
+            <label>
+                <div class="small muted">Meal Type</div>
+                <InputSelect class="input" @bind-Value="MealTypeFilter">
+                    <option value="@AllMode">All</option>
+                    @foreach (var mealType in LegacyReferenceData.MealTypes)
+                    {
+                        <option value="@mealType">@mealType</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+        <div class="hero-actions" style="margin-top: 12px">
+            @if (IsAdmin)
+            {
+                <label class="checkbox-chip">
+                    <input type="checkbox" @bind="IncludeDeletedMenus" />
+                    <span>Include menus marked deleted</span>
+                </label>
+            }
+            <button type="button" class="ghost-button" @onclick="ResetFilters">Reset filters</button>
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <span class="status-badge warn">@Message</span>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <h3 style="margin-bottom: 6px">Results</h3>
+                <p class="muted" style="margin: 0">@FilteredMenus.Count() menu@(FilteredMenus.Count() == 1 ? "" : "s") found</p>
+            </div>
+        </div>
+
+        @if (!FilteredMenus.Any())
+        {
+            <div class="empty-state" style="margin-top: 14px">@EmptyMenuMessage</div>
+        }
+        else
+        {
+            <div class="admin-table-wrap" style="margin-top: 14px">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Menu ID</th>
+                            <th>Name</th>
+                            <th>Program Type</th>
+                            <th>Contract Name</th>
+                            <th>Meal Type</th>
+                            <th>Menu Duration/Type</th>
+                            <th>Cycle</th>
+                            <th>Status</th>
+                            <th>Submitted To NYC Aging</th>
+                            <th>Review</th>
+                            <th>Actions</th>
+                            @if (IsAdmin)
+                            {
+                                <th>Delete</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var menu in FilteredMenus)
+                        {
+                            <tr>
+                                <td>@menu.Id</td>
+                                <td>
+                                    <strong>@menu.Name</strong>
+                                    <div class="muted small">@menu.StartDate?.ToString("MMM d, yyyy") to @menu.EndDate?.ToString("MMM d, yyyy")</div>
+                                </td>
+                                <td>@menu.ProgramType</td>
+                                <td>@(menu.ContractName ?? string.Join(", ", menu.Contracts))</td>
+                                <td>@menu.MealType</td>
+                                <td>@(menu.MenuDurationType ?? menu.MenuFormat)</td>
+                                <td>@menu.Cycle</td>
+                                <td><span class="status-badge">@menu.Status</span></td>
+                                <td>@(menu.SubmittedToNycAgingOn?.ToString("MMM d, yyyy") ?? "-")</td>
+                                <td>
+                                    @if (HasReviewComments(menu))
+                                    {
+                                        <a class="status-badge warn" href="@($"/menus/{menu.Id}?tab=comments")">Comments</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted small">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="resource-table-actions">
+                                        <a class="secondary-button tiny-button" href="@($"/menus/{menu.Id}")">View</a>
+                                        @if (IsProvider)
+                                        {
+                                            <button type="button" class="ghost-button tiny-button nowrap-button" @onclick="() => UseAsStartingPoint(menu)">Start from this</button>
+                                        }
+                                    </div>
+                                </td>
+                                @if (IsAdmin)
+                                {
+                                    <td><button type="button" class="ghost-button tiny-button" @onclick="() => DeleteMenu(menu)">Delete</button></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private const string AllMode = "all";
+    private List<MenuSummaryDto> SavedMenus { get; set; } = new();
+    private string SearchText { get; set; } = string.Empty;
+    private string StatusFilter { get; set; } = AllMode;
+    private string ContractFilter { get; set; } = AllMode;
+    private string NutritionAdvisorFilter { get; set; } = AllMode;
+    private string ProgramTypeFilter { get; set; } = AllMode;
+    private string MealTypeFilter { get; set; } = AllMode;
+    private bool IncludeDeletedMenus { get; set; }
+    private string? Message { get; set; }
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+    private IEnumerable<string> StatusOptions => IsProvider ? AppModeService.ProviderMenuStatuses : LegacyReferenceData.MenuStatuses;
+    private string MenuPageDescription => IsProvider
+        ? $"Submitted, approved, returned, and completed menus for {AppMode.ProviderContract}. Use any listed menu as the starting point for a new draft."
+        : "Search and filter saved menus by the fields used in the existing Simple Servings workflow.";
+    private string EmptyMenuMessage => IsProvider
+        ? $"No submitted or approved menus are visible for {AppMode.ProviderContract} yet. Use Build Menu for a blank draft, or Sample Menus for a template."
+        : "No menus saved yet. Use Add New to create the first menu.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        SavedMenus = await Api.GetMenusAsync();
+    }
+
+    private IEnumerable<MenuSummaryDto> FilteredMenus =>
+        SavedMenus
+            .Where(menu => IsAdmin || AppMode.CanProviderSeeMenu(menu))
+            .Where(menu => IncludeDeletedMenus || !menu.Status.Equals("Deleted", StringComparison.OrdinalIgnoreCase))
+            .Where(menu => string.IsNullOrWhiteSpace(SearchText)
+                || menu.Id.ToString().Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || menu.Name.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(menu => StatusFilter == AllMode || menu.Status.Equals(StatusFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(menu => ContractFilter == AllMode
+                || (menu.ContractName ?? string.Empty).Equals(ContractFilter, StringComparison.OrdinalIgnoreCase)
+                || menu.Contracts.Any(contract => contract.Equals(ContractFilter, StringComparison.OrdinalIgnoreCase)))
+            .Where(menu => NutritionAdvisorFilter == AllMode || (menu.NutritionAdvisor ?? string.Empty).Equals(NutritionAdvisorFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(menu => ProgramTypeFilter == AllMode || (menu.ProgramType ?? string.Empty).Equals(ProgramTypeFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(menu => MealTypeFilter == AllMode || (menu.MealType ?? string.Empty).Equals(MealTypeFilter, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(menu => menu.CreatedAt);
+
+    private void ResetFilters()
+    {
+        SearchText = string.Empty;
+        StatusFilter = AllMode;
+        ContractFilter = AllMode;
+        NutritionAdvisorFilter = AllMode;
+        ProgramTypeFilter = AllMode;
+        MealTypeFilter = AllMode;
+        IncludeDeletedMenus = false;
+        Message = null;
+    }
+
+    private void DeleteMenu(MenuSummaryDto menu)
+    {
+        if (!IsAdmin)
+        {
+            return;
+        }
+
+        Message = $"Delete selected for Menu ID {menu.Id}. Deletion can be saved after menu status history is connected.";
+    }
+
+    private async Task UseAsStartingPoint(MenuSummaryDto menu)
+    {
+        if (!IsProvider)
+        {
+            return;
+        }
+
+        var detail = await Api.GetMenuAsync(menu.Id);
+        if (detail is null)
+        {
+            Message = $"Could not load Menu ID {menu.Id}.";
+            return;
+        }
+
+        var draft = MenuReuseMapper.FromMenu(detail, preserveDates: false, sourceType: "past-menu");
+        draft.ContractName = AppMode.ProviderContract;
+        draft.Contracts = [AppMode.ProviderContract];
+        draft.CreatedBy = AppMode.ProviderContract;
+        Drafts.Set(draft);
+        Navigation.NavigateTo("/menus/new");
+    }
+
+    private static bool HasReviewComments(MenuSummaryDto menu) =>
+        !string.IsNullOrWhiteSpace(menu.ReturnedComments)
+        || !string.IsNullOrWhiteSpace(menu.ApprovalNotes);
+}

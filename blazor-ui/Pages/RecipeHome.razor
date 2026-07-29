@@ -1,0 +1,143 @@
+@page "/recipes/home"
+@inject PythonApiClient Api
+@inject AppModeService AppMode
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Recipe</div>
+                <h2 style="margin-bottom: 6px">Recipe home</h2>
+                <p class="muted" style="margin: 0">Browse approved recipes by category, favorites, and the same advanced search groups staff know from Simple Servings.</p>
+            </div>
+            <div class="hero-actions">
+                <a class="button" href="/recipes/new">Add Recipe</a>
+                @if (AppMode.IsAdmin)
+                {
+                    <a class="ghost-button" href="/recipes/review">Recipe Review</a>
+                }
+                <a class="button" href="/recipes">Recipe List</a>
+                <a class="ghost-button" href="/recipes/favorites">My Favorites</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Our Recipes</div>
+                <h3 style="margin-bottom: 6px">Recipe categories</h3>
+            </div>
+        </div>
+        <div class="legacy-tile-grid">
+            @foreach (var tile in LegacyReferenceData.RecipeTiles)
+            {
+                <a class="legacy-tile link-card" href="@($"/recipes?legacy={Uri.EscapeDataString(tile.FilterValue)}")">
+                    <span class="legacy-tile-head">
+                        <span class="legacy-tile-mark">@tile.Label.Substring(0, 1)</span>
+                        <strong>@tile.Label</strong>
+                    </span>
+                    <span>@tile.Description</span>
+                </a>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Advanced Search By Category</div>
+                <h3 style="margin-bottom: 6px">Filter groups</h3>
+            </div>
+            <a class="ghost-button" href="/recipes">Search / See All Recipes</a>
+        </div>
+        <div class="legacy-accordion-grid">
+            @foreach (var group in LegacyReferenceData.RecipeFilterGroups)
+            {
+                <article class="legacy-search-group">
+                    <div class="legacy-search-title">@group.Label</div>
+                    <div class="filter-chip-grid">
+                        @foreach (var option in group.Options)
+                        {
+                            <a class="secondary-button tiny-button" href="@($"/recipes?legacy={Uri.EscapeDataString(option)}")">@option</a>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Featured Recipes</div>
+                <h3 style="margin-bottom: 6px">Frequently used approved recipes</h3>
+            </div>
+            <div class="hero-actions">
+                @if (AppMode.IsAdmin)
+                {
+                    <span class="status-badge warn">@PendingReviewCount pending review</span>
+                }
+                <span class="status-badge brand">@FeaturedRecipes.Count() recipes</span>
+            </div>
+        </div>
+        <div class="recipe-strip">
+            @foreach (var recipe in FeaturedRecipes)
+            {
+                <a class="recipe-strip-card link-card" href="@($"/recipes/{recipe.RecipeId}")">
+                    <div class="recipe-card-head">
+                        <div>
+                            <strong>@recipe.RecipeName</strong>
+                            <div class="muted small">@recipe.MealType · @recipe.Category · @recipe.Calories kcal</div>
+                        </div>
+                        <span class="status-badge brand">@DisplayCategory(recipe.Category)</span>
+                    </div>
+                    <div class="recipe-card-meta-line">
+                        <span>@DisplayMealType(recipe.MealType)</span>
+                        <span>@(recipe.IsPublic ? "Public" : "Private")</span>
+                        <span>Approved</span>
+                    </div>
+                </a>
+            }
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private List<RecipeDto> Recipes { get; set; } = [];
+
+    private IEnumerable<RecipeDto> FeaturedRecipes => Recipes
+        .Where(recipe => recipe.IsApproved && !recipe.IsDead)
+        .OrderByDescending(recipe => recipe.IsFavorite)
+        .ThenBy(recipe => recipe.RecipeName)
+        .Take(8);
+
+    private int PendingReviewCount => Recipes.Count(recipe => !recipe.IsApproved && !recipe.IsDead);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Recipes = await Api.GetRecipesAsync();
+    }
+
+    private static string DisplayCategory(string value) => value switch
+    {
+        "entree" => "Entrée",
+        "grain" => "Grains",
+        "milk" => "Milk/Yogurt",
+        "vegetable" => "Vegetable",
+        "fruit" => "Fruit",
+        "appetizer" => "Appetizer",
+        "condiment" => "Condiments",
+        _ => string.IsNullOrWhiteSpace(value) ? "Recipe" : char.ToUpperInvariant(value[0]) + value[1..]
+    };
+
+    private static string DisplayMealType(string value) => value switch
+    {
+        "breakfast" => "Breakfast",
+        "lunch" => "Lunch",
+        "dinner" => "Dinner",
+        "snack" => "Snack",
+        _ => string.IsNullOrWhiteSpace(value) ? "Meal" : char.ToUpperInvariant(value[0]) + value[1..]
+    };
+}

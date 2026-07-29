@@ -1,0 +1,121 @@
+@page "/menus/drafts"
+@inject PythonApiClient Api
+@inject AppModeService AppMode
+@inject MenuDraftService Drafts
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Menus</div>
+                <h2 style="margin-bottom: 6px">My Drafts</h2>
+                <p class="muted" style="margin: 0">@DraftPageDescription</p>
+            </div>
+            <div class="hero-actions">
+                <a class="button" href="/menus/new/blank">Build Menu</a>
+                <a class="secondary-button" href="/menus/new/sample">Sample Menus</a>
+                <a class="ghost-button" href="/menus">My Menus</a>
+            </div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <div class="empty-state" style="margin-top: 12px; text-align: left">@Message</div>
+        }
+    </section>
+
+    <section class="section">
+        @if (!DraftMenus.Any())
+        {
+            <div class="empty-state">@EmptyDraftMessage</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var menu in DraftMenus)
+                {
+                    <div class="table-row menu-table-row">
+                        <div class="table-main">
+                            <strong>@menu.Name</strong>
+                            <div class="muted small">@menu.ContractName · @menu.ProgramType · @menu.MealType · @menu.DietType</div>
+                            <div class="muted small">@menu.Cycle · Week @menu.CycleWeek · @menu.DaysPerWeek-day service</div>
+                            <div class="tag-list">
+                                <span class="tag-chip">@menu.Status</span>
+                                @foreach (var week in menu.CompletedWeeks)
+                                {
+                                    <span class="tag-chip">Week @week complete</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="table-metric">@menu.ItemCount items</div>
+                        <div class="table-metric">@menu.StatusDate?.ToString("MMM d")</div>
+                        <div class="table-metric">@menu.Contracts.Count contract(s)</div>
+                        <div>
+                            <div class="resource-table-actions">
+                                <button type="button" class="button tiny-button" @onclick="() => ContinueDraft(menu)">Continue</button>
+                                <a class="ghost-button tiny-button" href="@($"/menus/{menu.Id}")">View</a>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private List<MenuSummaryDto> Menus { get; set; } = [];
+    private string? Message { get; set; }
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+    private string DraftPageDescription => IsProvider
+        ? $"Draft, incomplete, and returned menus for {AppMode.ProviderContract}."
+        : "Draft, incomplete, and returned menus that still need work.";
+    private string EmptyDraftMessage => IsProvider
+        ? $"No draft menus are saved for {AppMode.ProviderContract}. Use Build Menu or Sample Menus to start one."
+        : "No draft menus are saved yet.";
+
+    private IEnumerable<MenuSummaryDto> DraftMenus => Menus
+        .Where(menu => DraftStatuses.Contains(menu.Status, StringComparer.OrdinalIgnoreCase))
+        .Where(menu => !IsProvider || MatchesProviderContract(menu))
+        .OrderByDescending(menu => menu.CreatedAt);
+
+    private static readonly string[] DraftStatuses = ["Draft", "Incomplete", "Returned for Correction", "Returned for correction (from NYC Aging)", "Pending review"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppMode.IsAdmin)
+        {
+            Navigation.NavigateTo("/menus/list", replace: true);
+            return;
+        }
+
+        Menus = await Api.GetMenusAsync();
+    }
+
+    private async Task ContinueDraft(MenuSummaryDto menu)
+    {
+        var detail = await Api.GetMenuAsync(menu.Id);
+        if (detail is null)
+        {
+            Message = $"Could not load Menu ID {menu.Id}.";
+            return;
+        }
+
+        var draft = MenuReuseMapper.FromMenu(detail, preserveDates: true, sourceType: "draft");
+        if (IsProvider)
+        {
+            draft.ContractName = AppMode.ProviderContract;
+            draft.Contracts = [AppMode.ProviderContract];
+            draft.CreatedBy = AppMode.ProviderContract;
+        }
+
+        Drafts.Set(draft);
+        Navigation.NavigateTo("/menus/new");
+    }
+
+    private bool MatchesProviderContract(MenuSummaryDto menu) =>
+        (menu.ContractName ?? string.Empty).Equals(AppMode.ProviderContract, StringComparison.OrdinalIgnoreCase)
+        || menu.Contracts.Any(contract => contract.Equals(AppMode.ProviderContract, StringComparison.OrdinalIgnoreCase));
+}

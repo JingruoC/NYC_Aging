@@ -1,0 +1,1209 @@
+@page "/recipes/review"
+@page "/recipes/{RecipeId:int}/review"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+@inject AppModeService AppMode
+@inject IJSRuntime Js
+
+<div class="grid" style="gap: 18px">
+    @if (!IsAdmin)
+    {
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Recipe Review</div>
+                    <h2 style="margin-bottom: 6px">Staff review workspace</h2>
+                    <p class="muted" style="margin: 0">Recipe approval, correction comments, and catalog decisions are only visible to NYC Aging staff.</p>
+                </div>
+                <div class="hero-actions">
+                    <a class="button" href="/recipes/new">Add Recipe</a>
+                    <a class="ghost-button" href="/recipes">Recipe List</a>
+                </div>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Recipe Review</div>
+                    <h2 style="margin-bottom: 6px">Recipe review queue</h2>
+                    <p class="muted" style="margin: 0">Review provider recipe submissions before they become approved Simple Servings catalog items.</p>
+                </div>
+                <div class="hero-actions">
+                    <span class="status-badge warn">@PendingCount pending</span>
+                    <span class="status-badge brand">@ReturnedCount returned</span>
+                    <a class="ghost-button" href="/recipes/new">Add Recipe</a>
+                    <a class="ghost-button" href="/recipes">Recipe List</a>
+                </div>
+            </div>
+        </section>
+
+        @if (_loading)
+        {
+            <section class="section">
+                <div class="empty-state">Loading recipe submissions...</div>
+            </section>
+        }
+        else
+        {
+            <div class="recipe-review-layout">
+                <aside class="section recipe-review-queue">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Queue</div>
+                            <h3 style="margin-bottom: 6px">Submitted recipes</h3>
+                        </div>
+                        <span class="status-badge brand">@FilteredQueue.Count() result@(FilteredQueue.Count() == 1 ? "" : "s")</span>
+                    </div>
+
+                    <div class="recipe-review-filters">
+                        <InputText class="input compact-input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search recipe, provider, tag" />
+                        <label>
+                            <div class="small muted">Status</div>
+                            <InputSelect class="input compact-input" @bind-Value="StatusFilter">
+                                @foreach (var option in StatusOptions)
+                                {
+                                    <option value="@option.Key">@option.Label</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label>
+                            <div class="small muted">Submission type</div>
+                            <InputSelect class="input compact-input" @bind-Value="TypeFilter">
+                                @foreach (var option in TypeOptions)
+                                {
+                                    <option value="@option.Key">@option.Label</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </div>
+
+                    @if (!FilteredQueue.Any())
+                    {
+                        <div class="empty-state compact-empty">No recipe submissions match these filters.</div>
+                    }
+                    else
+                    {
+                        <div class="recipe-review-list">
+                            @foreach (var recipe in FilteredQueue)
+                            {
+                                <button type="button"
+                                        class="recipe-review-card @(SelectedRecipe?.RecipeId == recipe.RecipeId ? "active" : "")"
+                                        @onclick="() => SelectRecipe(recipe)">
+                                    <span class="status-badge @StatusBadgeClass(recipe)">@RecipeStatus(recipe)</span>
+                                    <strong>@recipe.RecipeName</strong>
+                                    <span class="muted small">@SubmissionType(recipe)</span>
+                                    <span class="muted small">@ProviderLabel(recipe) · @recipe.CreatedOn?.ToString("MMM d, yyyy")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </aside>
+
+                <section class="recipe-review-detail">
+                    @if (SelectedRecipe is null)
+                    {
+                        <section class="section">
+                            <div class="empty-state">Select a recipe submission to review.</div>
+                        </section>
+                    }
+                    else
+                    {
+                        <section class="section">
+                            <div class="section-header">
+                                <div>
+                                    <div class="eyebrow">Selected Recipe</div>
+                                    <h3 style="margin-bottom: 6px">@SelectedRecipe.RecipeName</h3>
+                                    <p class="muted" style="margin: 0">@ProviderLabel(SelectedRecipe) · @SubmissionType(SelectedRecipe)</p>
+                                </div>
+                                <div class="hero-actions">
+                                    <span class="status-badge @StatusBadgeClass(SelectedRecipe)">@RecipeStatus(SelectedRecipe)</span>
+                                    <a class="ghost-button" href="@($"/recipes/{SelectedRecipe.RecipeId}")">View record</a>
+                                </div>
+                            </div>
+
+                            <div class="recipe-review-record-panel">
+                                <div class="recipe-review-record-grid">
+                                    <div class="recipe-review-record-row">
+                                        <span>Recipe ID</span>
+                                        <strong>#@SelectedRecipe.RecipeId</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Status</span>
+                                        <strong>@RecipeStatus(SelectedRecipe)</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Provider / submitter</span>
+                                        <strong>@ProviderLabel(SelectedRecipe)</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Submitted</span>
+                                        <strong>@SelectedRecipe.CreatedOn?.ToString("MMM d, yyyy")</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Submission type</span>
+                                        <strong>@SubmissionType(SelectedRecipe)</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Meal / category</span>
+                                        <strong>@SelectedRecipe.MealType · @SelectedRecipe.Category</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Serving / yield</span>
+                                        <strong>@(SelectedRecipe.ServingSize ?? "Not entered") · @SelectedRecipe.YieldServings serving(s)</strong>
+                                    </div>
+                                    <div class="recipe-review-record-row">
+                                        <span>Public view</span>
+                                        <strong>@(SelectedRecipe.IsPublic ? "Public" : "Sponsor private")</strong>
+                                    </div>
+                                </div>
+                                <div class="recipe-review-compact-strip">
+                                    <span>@SelectedRecipe.Calories kcal</span>
+                                    <span>@SelectedRecipe.SodiumMg mg sodium</span>
+                                    <span>@SelectedRecipe.ProteinG g protein</span>
+                                    <span>@SelectedRecipe.FiberG g fiber</span>
+                                    <span>@SelectedRecipe.FatG g fat</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="section">
+                            <div class="section-header">
+                                <div>
+                                    <h3 style="margin-bottom: 6px">Recipe content</h3>
+                                    <p class="muted" style="margin: 0">Provider-submitted ingredients, directions when applicable, and form fields. Nutrition values are summarized above.</p>
+                                </div>
+                                <div class="hero-actions">
+                                    @if (IsEditingRecipe)
+                                    {
+                                        <button type="button" class="secondary-button" @onclick="SaveRecipeEdits" disabled="@_saving">Save edits</button>
+                                        <button type="button" class="ghost-button" @onclick="CancelRecipeEdit" disabled="@_saving">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="ghost-button" @onclick="BeginRecipeEdit">Edit submitted fields</button>
+                                    }
+                                </div>
+                            </div>
+                            @if (!IsEditingRecipe && !string.IsNullOrWhiteSpace(EditMessage))
+                            {
+                                <span class="status-badge good" style="margin-top: 12px">@EditMessage</span>
+                            }
+                            @{
+                                var meaningfulDirections = MeaningfulDirections(SelectedRecipe).ToList();
+                                var showDirections = meaningfulDirections.Any();
+                            }
+                            @if (IsEditingRecipe)
+                            {
+                                <div class="recipe-edit-panel">
+                                    <div class="form-grid-two">
+                                        <label>
+                                            <div class="small muted">Recipe name</div>
+                                            <InputText class="input" @bind-Value="EditDraft.RecipeName" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Provider / submitter</div>
+                                            <InputText class="input" @bind-Value="EditDraft.ContributedBy" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Meal type</div>
+                                            <InputSelect class="input" @bind-Value="EditDraft.MealType">
+                                                @foreach (var option in MealTypeOptions)
+                                                {
+                                                    <option value="@option">@option</option>
+                                                }
+                                            </InputSelect>
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Category</div>
+                                            <InputSelect class="input" @bind-Value="EditDraft.Category">
+                                                @foreach (var option in CategoryOptions)
+                                                {
+                                                    <option value="@option">@option</option>
+                                                }
+                                            </InputSelect>
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Serving size</div>
+                                            <InputText class="input" @bind-Value="EditDraft.ServingSize" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Yield / servings</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.YieldServings" />
+                                        </label>
+                                    </div>
+
+                                    <div class="form-grid-three">
+                                        <label>
+                                            <div class="small muted">Calories</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.Calories" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Sodium mg</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.SodiumMg" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Protein g</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.ProteinG" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Fiber g</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.FiberG" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Fat g</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.FatG" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Calcium mg</div>
+                                            <InputNumber class="input" @bind-Value="EditDraft.CalciumMg" />
+                                        </label>
+                                    </div>
+
+                                    <div class="form-grid-two">
+                                        <label>
+                                            <div class="small muted">@IngredientSectionTitle(SelectedRecipe)</div>
+                                            <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.IngredientsText" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Directions</div>
+                                            <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.InstructionsText" />
+                                        </label>
+                                        <label>
+                                            <div class="small muted">Submission fields</div>
+                                            <InputTextArea class="input recipe-textarea" @bind-Value="EditDraft.SubmissionFieldsText" />
+                                        </label>
+                                        <div class="recipe-edit-meta">
+                                            <label>
+                                                <div class="small muted">Tags</div>
+                                                <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.TagsText" />
+                                            </label>
+                                            <label>
+                                                <div class="small muted">Nutrient claims</div>
+                                                <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.NutrientClaimsText" />
+                                            </label>
+                                            <label class="checkbox-chip">
+                                                <InputCheckbox @bind-Value="EditDraft.IsPublic" />
+                                                Public recipe record
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="hero-actions">
+                                        <button type="button" class="button" @onclick="SaveRecipeEdits" disabled="@_saving">Save edits</button>
+                                        <button type="button" class="ghost-button" @onclick="CancelRecipeEdit" disabled="@_saving">Cancel</button>
+                                        @if (!string.IsNullOrWhiteSpace(EditMessage))
+                                        {
+                                            <span class="status-badge @(EditMessage.StartsWith("Saved", StringComparison.OrdinalIgnoreCase) ? "good" : "warn")">@EditMessage</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="recipe-review-content-grid @(showDirections ? "" : "single-card")">
+                                    <div class="recipe-review-notes @(showDirections ? "" : "wide-card")">
+                                        <h4>@IngredientSectionTitle(SelectedRecipe)</h4>
+                                        @if (!SelectedRecipe.Ingredients.Any())
+                                        {
+                                            <div class="muted small">No ingredient list was submitted.</div>
+                                        }
+                                        else
+                                        {
+                                            <ul class="plain-list">
+                                                @foreach (var ingredient in SelectedRecipe.Ingredients)
+                                                {
+                                                    <li>@ingredient</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </div>
+                                    @if (showDirections)
+                                    {
+                                        <div class="recipe-review-notes">
+                                            <h4>Directions</h4>
+                                            <ol class="plain-list">
+                                                @foreach (var step in meaningfulDirections)
+                                                {
+                                                    <li>@step</li>
+                                                }
+                                            </ol>
+                                        </div>
+                                    }
+                                    <div class="recipe-review-notes wide-card">
+                                        <h4>Submission fields</h4>
+                                        @if (!SubmissionNotes.Any())
+                                        {
+                                            <div class="muted small">No submission notes are attached.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="recipe-review-field-list">
+                                                @foreach (var note in SubmissionNotes)
+                                                {
+                                                    <div class="recipe-review-field-row">
+                                                        <span>@note.Label</span>
+                                                        <span>@note.Value</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </section>
+
+                        <section class="section">
+                            <div class="section-header">
+                                <div>
+                                    <h3 style="margin-bottom: 6px">Submission and revision history</h3>
+                                    <p class="muted" style="margin: 0">High-level review events only: submitted, comments sent, returned, resubmitted, and approved.</p>
+                                </div>
+                                <span class="status-badge brand">@WorkflowEvents.Count() step@(WorkflowEvents.Count() == 1 ? "" : "s")</span>
+                            </div>
+                            <div class="admin-table-wrap" style="margin-top: 14px">
+                                <table class="admin-table recipe-review-history-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Step</th>
+                                            <th>By</th>
+                                            <th>Notes</th>
+                                            <th>Visibility</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var comment in WorkflowEvents)
+                                        {
+                                            <tr>
+                                                <td>@comment.CreatedAt.ToString("MMM d, yyyy")</td>
+                                                <td><span class="status-badge @comment.BadgeClass">@comment.Action</span></td>
+                                                <td>
+                                                    <strong>@comment.Author</strong>
+                                                    <div class="muted small">@comment.Role</div>
+                                                </td>
+                                                <td>@comment.Body</td>
+                                                <td>@comment.Visibility</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    }
+                </section>
+
+                <aside class="section recipe-review-side">
+                    @if (SelectedRecipe is null)
+                    {
+                        <div class="empty-state">Select a recipe first.</div>
+                    }
+                    else
+                    {
+                        <div class="section-header">
+                            <div>
+                                <div class="eyebrow">Comments</div>
+                                <h3 style="margin-bottom: 6px">Review notes</h3>
+                                <p class="muted" style="margin: 0">Comments are visible to providers unless marked internal.</p>
+                            </div>
+                        </div>
+
+                        <div class="comment-entry">
+                            <label>
+                                <div class="small muted">Comment applies to</div>
+                                <InputSelect class="input compact-input" @bind-Value="SelectedRecipeCommentTargetKey">
+                                    @foreach (var target in RecipeCommentTargets)
+                                    {
+                                        <option value="@target.Key">@target.Label</option>
+                                    }
+                                </InputSelect>
+                                <div class="muted small" style="margin-top: 6px">@SelectedTarget.Description</div>
+                            </label>
+                            <label>
+                                <div class="small muted">Comment to provider</div>
+                                <InputTextArea class="input comment-textarea" @bind-Value="NewCommentBody" />
+                            </label>
+                            <label>
+                                <div class="small muted">Visibility</div>
+                                <InputSelect class="input compact-input" @bind-Value="CommentVisibility">
+                                    <option value="Admin and provider">Admin and provider</option>
+                                    <option value="Internal">Internal only</option>
+                                </InputSelect>
+                            </label>
+                            <div class="hero-actions">
+                                <button type="button" class="button" @onclick="AddReviewComment">Add comment</button>
+                                <button type="button" class="ghost-button" @onclick="ClearCommentDraft">Clear</button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(ActionMessage))
+                            {
+                                <span class="status-badge good">@ActionMessage</span>
+                            }
+                        </div>
+
+                        <div class="comment-summary-tool">
+                            <div class="section-header compact-header">
+                                <div>
+                                    <h4>Comment summary for email</h4>
+                                    <p class="muted small">Generate a provider-facing summary grouped by the recipe section or overall recipe target.</p>
+                                </div>
+                                <div class="hero-actions">
+                                    <button type="button" class="ghost-button" @onclick="ToggleRecipeCommentSummary">
+                                        @(ShowRecipeCommentSummary ? "Hide summary" : "Generate summary")
+                                    </button>
+                                    @if (ShowRecipeCommentSummary)
+                                    {
+                                        <button type="button" class="secondary-button" @onclick="CopyRecipeCommentSummary">Copy summary</button>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (ShowRecipeCommentSummary)
+                            {
+                                <div class="comment-summary-generated">
+                                    <div class="comment-summary-stats">
+                                        <span>@ProviderFacingRecipeSummaryComments.Count() provider-facing comment@(ProviderFacingRecipeSummaryComments.Count() == 1 ? "" : "s")</span>
+                                        <span>@ProviderFacingRecipeSummaryComments.Select(RecipeSummaryTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count() target@(ProviderFacingRecipeSummaryComments.Select(RecipeSummaryTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1 ? "" : "s")</span>
+                                    </div>
+                                    <textarea class="input comment-summary-textarea" readonly>@RecipeCommentSummaryText</textarea>
+                                    @if (!string.IsNullOrWhiteSpace(RecipeCommentSummaryMessage))
+                                    {
+                                        <span class="status-badge good">@RecipeCommentSummaryMessage</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="comment-thread">
+                            @if (!VisibleComments.Any())
+                            {
+                                <div class="empty-state compact-empty">No comments have been added to this recipe yet.</div>
+                            }
+                            else
+                            {
+                                @foreach (var comment in VisibleComments)
+                                {
+                                    <div class="comment-card">
+                                        <div class="comment-card-head">
+                                            <div>
+                                                <strong>@comment.Author</strong>
+                                                <div class="muted small">@comment.Role · @comment.CreatedAt.ToString("MMM d, yyyy h:mm tt")</div>
+                                            </div>
+                                            <span class="status-badge @comment.BadgeClass">@comment.Action</span>
+                                        </div>
+                                        <p>@comment.Body</p>
+                                        <div class="comment-card-meta">
+                                            <span>@comment.Visibility</span>
+                                            <span>@(comment.TargetLabel ?? "Overall recipe")</span>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        <div class="recipe-review-actions">
+                            <button type="button" class="secondary-button" @onclick="ReturnForCorrection" disabled="@_saving">Return for correction</button>
+                            <button type="button" class="button" @onclick="ApproveRecipe" disabled="@_saving">Approve recipe</button>
+                        </div>
+                    }
+                </aside>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int? RecipeId { get; set; }
+
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private const string AllFilter = "all";
+    private const string PendingFilter = "pending";
+    private const string ReturnedFilter = "returned";
+    private const string ApprovedFilter = "approved";
+    private const string FullRecipeType = "full recipe with ingredients and directions";
+    private const string NutritionAnalysisType = "recipe nutrition analysis";
+    private const string ProductLabelType = "pre-prepared product label";
+    private static readonly RecipeCommentTarget OverallTarget = new("overall", "Overall recipe summary", "Use this for general review comments.");
+
+    private bool _loading = true;
+    private bool _saving;
+    private List<RecipeDto> Recipes { get; set; } = [];
+    private List<RecipeReviewCommentDto> ReviewComments { get; set; } = [];
+    private RecipeDto? SelectedRecipe { get; set; }
+    private string SearchText { get; set; } = string.Empty;
+    private string StatusFilter { get; set; } = PendingFilter;
+    private string TypeFilter { get; set; } = AllFilter;
+    private string NewCommentBody { get; set; } = string.Empty;
+    private string CommentVisibility { get; set; } = "Admin and provider";
+    private string? ActionMessage { get; set; }
+    private bool ShowRecipeCommentSummary { get; set; }
+    private string? RecipeCommentSummaryMessage { get; set; }
+    private bool IsEditingRecipe { get; set; }
+    private string? EditMessage { get; set; }
+    private RecipeEditDraft EditDraft { get; set; } = new();
+    private RecipeCommentTarget SelectedTarget { get; set; } = OverallTarget;
+    private bool IsAdmin => CurrentRole == AppRole.Admin || AppMode.IsAdmin;
+
+    private IReadOnlyList<RecipeCommentTarget> RecipeCommentTargets =>
+        SelectedRecipe is null
+            ? [OverallTarget]
+            : BuildRecipeCommentTargets(SelectedRecipe).ToList();
+
+    private string SelectedRecipeCommentTargetKey
+    {
+        get => SelectedTarget.Key;
+        set
+        {
+            SelectedTarget = RecipeCommentTargets.FirstOrDefault(target => target.Key.Equals(value, StringComparison.OrdinalIgnoreCase))
+                ?? OverallTarget;
+            ActionMessage = null;
+        }
+    }
+
+    private static readonly ReviewOption[] StatusOptions =
+    [
+        new(PendingFilter, "Pending review"),
+        new(ReturnedFilter, "Returned for correction"),
+        new(ApprovedFilter, "Approved"),
+        new(AllFilter, "All statuses")
+    ];
+
+    private static readonly ReviewOption[] TypeOptions =
+    [
+        new(AllFilter, "All submission types"),
+        new("full", "Full recipe"),
+        new("analysis", "Nutrition analysis"),
+        new("product", "Product label")
+    ];
+
+    private static readonly string[] MealTypeOptions = ["breakfast", "lunch", "dinner", "snack"];
+
+    private static readonly string[] CategoryOptions =
+    [
+        "entree",
+        "side",
+        "grain",
+        "fruit",
+        "vegetable",
+        "milk",
+        "dairy-free",
+        "condiments",
+        "juice",
+        "alternate"
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsAdmin)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        Recipes = await Api.GetRecipesAsync();
+
+        SelectedRecipe = RecipeId is int id
+            ? Recipes.FirstOrDefault(recipe => recipe.RecipeId == id)
+            : FilteredQueue.FirstOrDefault()
+                ?? Recipes.Where(recipe => !recipe.IsDead).OrderByDescending(recipe => recipe.CreatedOn ?? DateTime.MinValue).FirstOrDefault();
+
+        await LoadCommentsForSelectedRecipe();
+        _loading = false;
+    }
+
+    private int PendingCount => Recipes.Count(recipe => !recipe.IsApproved && !recipe.IsDead && !IsReturned(recipe));
+    private int ReturnedCount => Recipes.Count(recipe => !recipe.IsApproved && !recipe.IsDead && IsReturned(recipe));
+
+    private IEnumerable<RecipeDto> FilteredQueue =>
+        Recipes
+            .Where(recipe => !recipe.IsDead)
+            .Where(recipe => recipe.Matches(SearchText))
+            .Where(recipe => StatusFilter == AllFilter
+                || (StatusFilter == PendingFilter && !recipe.IsApproved && !IsReturned(recipe))
+                || (StatusFilter == ReturnedFilter && !recipe.IsApproved && IsReturned(recipe))
+                || (StatusFilter == ApprovedFilter && recipe.IsApproved))
+            .Where(recipe => TypeFilter == AllFilter || SubmissionTypeKey(recipe) == TypeFilter)
+            .OrderBy(recipe => recipe.IsApproved ? 2 : IsReturned(recipe) ? 1 : 0)
+            .ThenByDescending(recipe => recipe.CreatedOn ?? DateTime.MinValue)
+            .ThenByDescending(recipe => recipe.RecipeId);
+
+    private IReadOnlyList<SubmissionNote> SubmissionNotes =>
+        (SelectedRecipe?.ScaleNote ?? string.Empty)
+            .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line =>
+            {
+                var colonIndex = line.IndexOf(':');
+                return colonIndex < 0
+                    ? new SubmissionNote("Note", line)
+                    : new SubmissionNote(line[..colonIndex].Trim(), line[(colonIndex + 1)..].Trim());
+            })
+            .Where(note => !string.IsNullOrWhiteSpace(note.Value))
+            .ToList();
+
+    private IEnumerable<RecipeReviewCommentDto> VisibleComments =>
+        ReviewComments
+            .Where(comment => !comment.IsUserComment || !IsSyntheticSubmission(comment))
+            .OrderByDescending(comment => comment.CreatedAt);
+
+    private IEnumerable<RecipeReviewCommentDto> ProviderFacingRecipeSummaryComments => VisibleComments
+        .Where(comment => comment.IsUserComment)
+        .Where(comment => !comment.Visibility.Equals("Internal", StringComparison.OrdinalIgnoreCase))
+        .Where(comment => !comment.Action.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+        .Where(comment => comment.Action.Contains("Comment", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Correction", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Returned", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(RecipeSummaryTargetLabel)
+        .ThenBy(comment => comment.CreatedAt);
+
+    private string RecipeCommentSummaryText => BuildRecipeCommentSummaryText();
+
+    private IEnumerable<RecipeReviewCommentDto> WorkflowEvents =>
+        BuildWorkflowEvents()
+            .GroupBy(comment => WorkflowStageKey(comment))
+            .Select(group => group.OrderByDescending(comment => comment.CreatedAt).First())
+            .OrderBy(comment => comment.CreatedAt);
+
+    private async Task SelectRecipe(RecipeDto recipe)
+    {
+        SelectedRecipe = recipe;
+        SelectedTarget = OverallTarget;
+        NewCommentBody = string.Empty;
+        IsEditingRecipe = false;
+        EditMessage = null;
+        ActionMessage = null;
+        Navigation.NavigateTo($"/recipes/{recipe.RecipeId}/review", replace: true);
+        await LoadCommentsForSelectedRecipe();
+    }
+
+    private async Task LoadCommentsForSelectedRecipe()
+    {
+        ReviewComments = SelectedRecipe is null
+            ? []
+            : await Api.GetRecipeCommentsAsync(SelectedRecipe.RecipeId);
+    }
+
+    private void BeginRecipeEdit()
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        EditDraft = RecipeEditDraft.FromRecipe(SelectedRecipe);
+        EditMessage = null;
+        IsEditingRecipe = true;
+    }
+
+    private void CancelRecipeEdit()
+    {
+        IsEditingRecipe = false;
+        EditMessage = null;
+    }
+
+    private async Task SaveRecipeEdits()
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(EditDraft.RecipeName))
+        {
+            EditMessage = "Recipe name is required.";
+            return;
+        }
+
+        _saving = true;
+        EditMessage = null;
+
+        try
+        {
+            var updated = CloneRecipe(SelectedRecipe);
+            updated.RecipeName = EditDraft.RecipeName.Trim();
+            updated.MealType = EditDraft.MealType.Trim();
+            updated.Category = EditDraft.Category.Trim();
+            updated.Calories = EditDraft.Calories;
+            updated.SodiumMg = EditDraft.SodiumMg;
+            updated.ProteinG = EditDraft.ProteinG;
+            updated.FiberG = EditDraft.FiberG;
+            updated.FatG = EditDraft.FatG;
+            updated.CalciumMg = EditDraft.CalciumMg;
+            updated.VitaminCMg = EditDraft.VitaminCMg;
+            updated.ServingSize = NullIfWhiteSpace(EditDraft.ServingSize);
+            updated.YieldServings = Math.Max(1, EditDraft.YieldServings);
+            updated.ScaleNote = NullIfWhiteSpace(EditDraft.SubmissionFieldsText);
+            updated.ContributedBy = NullIfWhiteSpace(EditDraft.ContributedBy);
+            updated.IsPublic = EditDraft.IsPublic;
+            updated.Ingredients = SplitLines(EditDraft.IngredientsText);
+            updated.Instructions = SplitLines(EditDraft.InstructionsText);
+            updated.Tags = SplitTokens(EditDraft.TagsText)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            updated.NutrientClaims = SplitTokens(EditDraft.NutrientClaimsText)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            updated = await Api.UpdateRecipeAsync(updated.RecipeId, updated);
+            var index = Recipes.FindIndex(recipe => recipe.RecipeId == updated.RecipeId);
+            if (index >= 0)
+            {
+                Recipes[index] = updated;
+            }
+
+            SelectedRecipe = updated;
+            IsEditingRecipe = false;
+            EditMessage = "Saved staff edits.";
+            await SaveWorkflowComment(
+                "Staff edit",
+                "NYC Aging staff edited recipe submission fields during review.",
+                "brand",
+                "Internal",
+                OverallTarget);
+        }
+        catch (HttpRequestException)
+        {
+            EditMessage = "Could not save edits. Check that the backend is running.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AddReviewComment()
+    {
+        if (SelectedRecipe is null || string.IsNullOrWhiteSpace(NewCommentBody))
+        {
+            ActionMessage = "Enter a comment before saving.";
+            return;
+        }
+
+        _saving = true;
+        var created = await Api.CreateRecipeCommentAsync(SelectedRecipe.RecipeId, new RecipeReviewCommentCreateRequest
+        {
+            Action = "Review comment",
+            Author = "NYC Aging Nutrition Unit",
+            Role = "Admin / Department staff",
+            Body = NewCommentBody.Trim(),
+            Visibility = CommentVisibility,
+            BadgeClass = CommentVisibility.Equals("Internal", StringComparison.OrdinalIgnoreCase) ? "brand" : "warn",
+            IsUserComment = true,
+            TargetType = SelectedTarget.Key,
+            TargetLabel = SelectedTarget.Label,
+            ReviewStatus = "open"
+        });
+
+        ReviewComments.Insert(0, created);
+        NewCommentBody = string.Empty;
+        ActionMessage = "Comment saved.";
+        _saving = false;
+    }
+
+    private async Task ReturnForCorrection()
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        var body = string.IsNullOrWhiteSpace(NewCommentBody)
+            ? "Returned for provider correction. Please review the linked comments and resubmit the recipe."
+            : NewCommentBody.Trim();
+
+        await SaveWorkflowComment("Returned for correction", body, "warn", "Admin and provider");
+        await UpdateSelectedRecipeStatus(isApproved: false, addTags: ["returned for correction", "pending review"], removeTags: []);
+        NewCommentBody = string.Empty;
+        ActionMessage = "Recipe returned for correction.";
+        _saving = false;
+    }
+
+    private async Task ApproveRecipe()
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        var body = string.IsNullOrWhiteSpace(NewCommentBody)
+            ? "Recipe approved for use in the Simple Servings catalog."
+            : NewCommentBody.Trim();
+
+        await SaveWorkflowComment("Approved", body, "good", "Admin and provider");
+        await UpdateSelectedRecipeStatus(isApproved: true, addTags: [], removeTags: ["pending review", "returned for correction"]);
+        NewCommentBody = string.Empty;
+        ActionMessage = "Recipe approved.";
+        _saving = false;
+    }
+
+    private async Task SaveWorkflowComment(string action, string body, string badgeClass, string visibility, RecipeCommentTarget? target = null)
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        var commentTarget = target ?? SelectedTarget;
+        var created = await Api.CreateRecipeCommentAsync(SelectedRecipe.RecipeId, new RecipeReviewCommentCreateRequest
+        {
+            Action = action,
+            Author = "NYC Aging Nutrition Unit",
+            Role = "Admin / Department staff",
+            Body = body,
+            Visibility = visibility,
+            BadgeClass = badgeClass,
+            IsUserComment = true,
+            TargetType = commentTarget.Key,
+            TargetLabel = commentTarget.Label,
+            ReviewStatus = action.Equals("Approved", StringComparison.OrdinalIgnoreCase) ? "resolved" : "open"
+        });
+
+        ReviewComments.Insert(0, created);
+    }
+
+    private async Task UpdateSelectedRecipeStatus(bool isApproved, IReadOnlyCollection<string> addTags, IReadOnlyCollection<string> removeTags)
+    {
+        if (SelectedRecipe is null)
+        {
+            return;
+        }
+
+        var updated = CloneRecipe(SelectedRecipe);
+        updated.IsApproved = isApproved;
+        updated.Tags = updated.Tags
+            .Where(tag => !removeTags.Any(remove => tag.Equals(remove, StringComparison.OrdinalIgnoreCase)))
+            .Concat(addTags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        updated = await Api.UpdateRecipeAsync(updated.RecipeId, updated);
+        var index = Recipes.FindIndex(recipe => recipe.RecipeId == updated.RecipeId);
+        if (index >= 0)
+        {
+            Recipes[index] = updated;
+        }
+
+        SelectedRecipe = updated;
+    }
+
+    private void ClearCommentDraft()
+    {
+        NewCommentBody = string.Empty;
+        ActionMessage = null;
+    }
+
+    private void ToggleRecipeCommentSummary()
+    {
+        ShowRecipeCommentSummary = !ShowRecipeCommentSummary;
+        RecipeCommentSummaryMessage = null;
+    }
+
+    private async Task CopyRecipeCommentSummary()
+    {
+        try
+        {
+            var copied = await Js.InvokeAsync<bool>("simpleServings.copyText", RecipeCommentSummaryText);
+            RecipeCommentSummaryMessage = copied
+                ? "Summary copied."
+                : "Copy failed. Select the summary text and copy it manually.";
+        }
+        catch (JSException)
+        {
+            RecipeCommentSummaryMessage = "Copy failed. Select the summary text and copy it manually.";
+        }
+    }
+
+    private string BuildRecipeCommentSummaryText()
+    {
+        if (SelectedRecipe is null)
+        {
+            return string.Empty;
+        }
+
+        var comments = ProviderFacingRecipeSummaryComments.ToList();
+        var lines = new List<string>
+        {
+            $"Recipe review comments: {SelectedRecipe.RecipeName}",
+            $"Provider/submitter: {ProviderLabel(SelectedRecipe)}",
+            $"Submission type: {SubmissionType(SelectedRecipe)}",
+            $"Submitted: {SelectedRecipe.CreatedOn?.ToString("MMM d, yyyy") ?? "Not listed"}",
+            $"Current status: {RecipeStatus(SelectedRecipe)}",
+            string.Empty
+        };
+
+        if (comments.Count == 0)
+        {
+            lines.Add("No provider-facing review comments have been added yet.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        lines.Add($"Summary: {comments.Count} provider-facing comment{Plural(comments.Count)} across {comments.Select(RecipeSummaryTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count()} review target{Plural(comments.Select(RecipeSummaryTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count())}.");
+        lines.Add(string.Empty);
+        lines.Add("Comments by recipe section:");
+
+        foreach (var group in comments.GroupBy(RecipeSummaryTargetLabel).OrderBy(group => group.Key))
+        {
+            lines.Add($"- {group.Key}");
+            foreach (var comment in group.OrderBy(comment => comment.CreatedAt))
+            {
+                lines.Add($"  - {CleanSummaryLine(comment.Body)}");
+            }
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("Requested next step: Please review the comments above, update the recipe submission as needed, and resubmit through Simple Servings.");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private IEnumerable<RecipeReviewCommentDto> BuildWorkflowEvents()
+    {
+        if (SelectedRecipe is null)
+        {
+            return [];
+        }
+
+        var submitted = new RecipeReviewCommentDto
+        {
+            Id = 0,
+            RecipeId = SelectedRecipe.RecipeId,
+            CreatedAt = SelectedRecipe.CreatedOn ?? DateTime.Today,
+            Action = "Submitted",
+            Author = ProviderLabel(SelectedRecipe),
+            Role = "Provider / Caterer",
+            Body = $"Submitted {SelectedRecipe.RecipeName} for NYC Aging recipe review.",
+            Visibility = "Admin and provider",
+            BadgeClass = "brand",
+            IsUserComment = false,
+            TargetType = "overall",
+            TargetLabel = "Overall recipe summary",
+            ReviewStatus = "open"
+        };
+
+        return ReviewComments
+            .Where(comment => IsWorkflowEvent(comment))
+            .Concat([submitted]);
+    }
+
+    private static bool IsWorkflowEvent(RecipeReviewCommentDto comment) =>
+        comment.Action.Contains("Submitted", StringComparison.OrdinalIgnoreCase)
+        || comment.Action.Contains("Staff edit", StringComparison.OrdinalIgnoreCase)
+        || comment.Action.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+        || comment.Action.Contains("Resubmitted", StringComparison.OrdinalIgnoreCase)
+        || comment.Action.Contains("Approved", StringComparison.OrdinalIgnoreCase)
+        || comment.Action.Contains("Comments sent", StringComparison.OrdinalIgnoreCase);
+
+    private static string WorkflowStageKey(RecipeReviewCommentDto comment)
+    {
+        var action = comment.Action.ToLowerInvariant();
+        if (action.Contains("approved"))
+        {
+            return "approved";
+        }
+
+        if (action.Contains("returned"))
+        {
+            return "returned";
+        }
+
+        if (action.Contains("resubmitted"))
+        {
+            return "resubmitted";
+        }
+
+        if (action.Contains("comments sent"))
+        {
+            return "comments-sent";
+        }
+
+        if (action.Contains("staff edit"))
+        {
+            return $"staff-edit-{comment.Id}-{comment.CreatedAt.Ticks}";
+        }
+
+        return "submitted";
+    }
+
+    private static bool IsSyntheticSubmission(RecipeReviewCommentDto comment) =>
+        comment.Id == 0 && comment.Action.Equals("Submitted", StringComparison.OrdinalIgnoreCase);
+
+    private static string RecipeSummaryTargetLabel(RecipeReviewCommentDto comment) =>
+        string.IsNullOrWhiteSpace(comment.TargetLabel) ? "Overall recipe summary" : comment.TargetLabel!;
+
+    private static string CleanSummaryLine(string body) =>
+        string.Join(' ', body.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Trim();
+
+    private static string Plural(int count) => count == 1 ? string.Empty : "s";
+
+    private string RecipeStatus(RecipeDto recipe)
+    {
+        if (recipe.IsApproved)
+        {
+            return "Approved";
+        }
+
+        return IsReturned(recipe) ? "Returned for correction" : "Pending review";
+    }
+
+    private static string StatusBadgeClass(RecipeDto recipe) =>
+        recipe.IsApproved ? "good" : IsReturned(recipe) ? "brand" : "warn";
+
+    private static bool IsReturned(RecipeDto recipe) =>
+        recipe.Tags.Any(tag => tag.Contains("returned", StringComparison.OrdinalIgnoreCase));
+
+    private static string SubmissionType(RecipeDto recipe)
+    {
+        var allTags = recipe.Tags.Select(tag => tag.ToLowerInvariant()).ToList();
+        if (allTags.Any(tag => tag.Contains(FullRecipeType)))
+        {
+            return "Full recipe";
+        }
+
+        if (allTags.Any(tag => tag.Contains(NutritionAnalysisType)))
+        {
+            return "Nutrition analysis";
+        }
+
+        if (allTags.Any(tag => tag.Contains(ProductLabelType)))
+        {
+            return "Product label";
+        }
+
+        return "Catalog recipe";
+    }
+
+    private static string SubmissionTypeKey(RecipeDto recipe) => SubmissionType(recipe) switch
+    {
+        "Full recipe" => "full",
+        "Nutrition analysis" => "analysis",
+        "Product label" => "product",
+        _ => "catalog"
+    };
+
+    private static string ProviderLabel(RecipeDto recipe) =>
+        string.IsNullOrWhiteSpace(recipe.ContributedBy) ? "Provider not listed" : recipe.ContributedBy!;
+
+    private static string IngredientSectionTitle(RecipeDto recipe) =>
+        SubmissionType(recipe).Equals("Product label", StringComparison.OrdinalIgnoreCase)
+            ? "Product label details"
+            : "Ingredients";
+
+    private static IEnumerable<string> MeaningfulDirections(RecipeDto recipe) =>
+        recipe.Instructions.Where(step => !IsPlaceholderDirection(step));
+
+    private static bool IsPlaceholderDirection(string step)
+    {
+        var normalized = step.Trim().TrimEnd('.').ToLowerInvariant();
+        return normalized.Equals("review the pre-prepared product label and ingredient list", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("review the uploaded nutrition analysis and ingredient list", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<RecipeCommentTarget> BuildRecipeCommentTargets(RecipeDto recipe)
+    {
+        yield return OverallTarget;
+        yield return new RecipeCommentTarget("ingredients", IngredientSectionTitle(recipe), "Use this for ingredient list or product label detail comments.");
+
+        if (MeaningfulDirections(recipe).Any())
+        {
+            yield return new RecipeCommentTarget("directions", "Directions", "Use this for preparation step comments.");
+        }
+
+        yield return new RecipeCommentTarget("submission-fields", "Submission fields", "Use this for submitted form fields, file names, or contact details.");
+        yield return new RecipeCommentTarget("nutrition", "Nutrition values", "Use this for calories, sodium, protein, fiber, fat, or nutrient data.");
+        yield return new RecipeCommentTarget("classification", "Meal/category/public setting", "Use this for meal type, category, tags, nutrient claims, or public/private setting.");
+    }
+
+    private static List<string> SplitLines(string value) =>
+        value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+
+    private static IEnumerable<string> SplitTokens(string value) =>
+        value.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => !string.IsNullOrWhiteSpace(token));
+
+    private static string? NullIfWhiteSpace(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static RecipeDto CloneRecipe(RecipeDto recipe) =>
+        new()
+        {
+            RecipeId = recipe.RecipeId,
+            RecipeName = recipe.RecipeName,
+            MealType = recipe.MealType,
+            Category = recipe.Category,
+            Calories = recipe.Calories,
+            SodiumMg = recipe.SodiumMg,
+            ProteinG = recipe.ProteinG,
+            FiberG = recipe.FiberG,
+            FatG = recipe.FatG,
+            Tags = [.. recipe.Tags],
+            IsApproved = recipe.IsApproved,
+            Ingredients = [.. recipe.Ingredients],
+            Instructions = [.. recipe.Instructions],
+            ServingSize = recipe.ServingSize,
+            YieldServings = recipe.YieldServings,
+            ScaleNote = recipe.ScaleNote,
+            ContributedBy = recipe.ContributedBy,
+            CreatedOn = recipe.CreatedOn,
+            IsPublic = recipe.IsPublic,
+            IsFavorite = recipe.IsFavorite,
+            IsDead = recipe.IsDead,
+            NutrientClaims = [.. recipe.NutrientClaims],
+            VitaminCMg = recipe.VitaminCMg,
+            CalciumMg = recipe.CalciumMg
+        };
+
+    private sealed record ReviewOption(string Key, string Label);
+    private sealed record SubmissionNote(string Label, string Value);
+    private sealed record RecipeCommentTarget(string Key, string Label, string Description);
+
+    private sealed class RecipeEditDraft
+    {
+        public string RecipeName { get; set; } = string.Empty;
+        public string MealType { get; set; } = "lunch";
+        public string Category { get; set; } = "entree";
+        public decimal Calories { get; set; }
+        public decimal SodiumMg { get; set; }
+        public decimal ProteinG { get; set; }
+        public decimal FiberG { get; set; }
+        public decimal FatG { get; set; }
+        public decimal VitaminCMg { get; set; }
+        public decimal CalciumMg { get; set; }
+        public string ServingSize { get; set; } = string.Empty;
+        public int YieldServings { get; set; } = 1;
+        public string ContributedBy { get; set; } = string.Empty;
+        public bool IsPublic { get; set; }
+        public string IngredientsText { get; set; } = string.Empty;
+        public string InstructionsText { get; set; } = string.Empty;
+        public string SubmissionFieldsText { get; set; } = string.Empty;
+        public string TagsText { get; set; } = string.Empty;
+        public string NutrientClaimsText { get; set; } = string.Empty;
+
+        public static RecipeEditDraft FromRecipe(RecipeDto recipe) => new()
+        {
+            RecipeName = recipe.RecipeName,
+            MealType = recipe.MealType,
+            Category = recipe.Category,
+            Calories = recipe.Calories,
+            SodiumMg = recipe.SodiumMg,
+            ProteinG = recipe.ProteinG,
+            FiberG = recipe.FiberG,
+            FatG = recipe.FatG,
+            VitaminCMg = recipe.VitaminCMg,
+            CalciumMg = recipe.CalciumMg,
+            ServingSize = recipe.ServingSize ?? string.Empty,
+            YieldServings = Math.Max(1, recipe.YieldServings),
+            ContributedBy = recipe.ContributedBy ?? string.Empty,
+            IsPublic = recipe.IsPublic,
+            IngredientsText = string.Join(Environment.NewLine, recipe.Ingredients),
+            InstructionsText = string.Join(Environment.NewLine, recipe.Instructions),
+            SubmissionFieldsText = recipe.ScaleNote ?? string.Empty,
+            TagsText = string.Join(Environment.NewLine, recipe.Tags),
+            NutrientClaimsText = string.Join(Environment.NewLine, recipe.NutrientClaims)
+        };
+    }
+}

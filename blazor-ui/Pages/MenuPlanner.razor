@@ -1,0 +1,1811 @@
+@page "/menus/new"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+@inject MenuDraftService Drafts
+@inject IJSRuntime Js
+@inject AppModeService AppMode
+@implements IAsyncDisposable
+
+<div class="grid planner-root" style="gap: 18px" tabindex="0" @onkeydown="HandlePlannerKeyDown" @ref="_plannerRoot">
+    <section class="section planner-command">
+        <div class="planner-command-header">
+            <div>
+                <div class="eyebrow">Weekly planning</div>
+                <h3 style="margin: 6px 0 0">Build weekly menu</h3>
+            </div>
+            <div class="hero-actions">
+                <button type="button" class="secondary-button" @onclick="RunMenuCheck">Check nutrition</button>
+                @if (CompletedWeeks.Contains(ActiveWeek))
+                {
+                    <button type="button" class="secondary-button" @onclick="MakeActiveWeekIncomplete">Reopen week</button>
+                }
+                else
+                {
+                    <button type="button" class="button" @onclick="MarkActiveWeekComplete">Mark week complete</button>
+                }
+                <button type="button" class="button" @onclick="SaveMenu" disabled="@Saving">@(Saving ? "Saving..." : "Save menu")</button>
+                <button type="button" class="secondary-button" @onclick="ClearWeek">Clear week</button>
+                <button type="button" class="secondary-button" @onclick="ClearSelectedDay" disabled="@(SelectedCell is null)">Clear day</button>
+            </div>
+        </div>
+
+        <div class="planner-command-row">
+            <label>
+                <div class="small muted">Menu name</div>
+                <InputText class="input compact-input" @bind-Value="MenuName" />
+            </label>
+            <label>
+                <div class="small muted">Start date</div>
+                <InputDate class="input compact-input" Value="StartDate" ValueChanged="@(EventCallback.Factory.Create<DateTime>(this, OnStartDateChanged))" ValueExpression="@(() => StartDate)" />
+            </label>
+            <label>
+                <div class="small muted">Menu coverage</div>
+                <InputSelect class="input compact-input" Value="MenuCoverage" ValueChanged="@(EventCallback.Factory.Create<string>(this, OnMenuCoverageChanged))" ValueExpression="@(() => MenuCoverage)">
+                    @foreach (var option in MealCoverageOptions)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </InputSelect>
+            </label>
+            <div>
+                <div class="small muted">Week in cycle</div>
+                <div class="segmented-control">
+                    @for (var week = 1; week <= 6; week++)
+                    {
+                        var selectedWeek = week;
+                        <button type="button" class="@(ActiveWeek == selectedWeek ? "active" : "")" @onclick="() => SetActiveWeek(selectedWeek)">Week @selectedWeek</button>
+                    }
+                </div>
+            </div>
+            <div>
+                <div class="small muted">Service pattern</div>
+                <div class="segmented-control compact">
+                    <button type="button" class="@(DaysPerWeek == 5 ? "active" : "")" @onclick="() => SetDaysPerWeek(5)">5-day</button>
+                    <button type="button" class="@(DaysPerWeek == 7 ? "active" : "")" @onclick="() => SetDaysPerWeek(7)">7-day</button>
+                </div>
+            </div>
+        </div>
+
+        <details class="setup-details">
+            <summary>More setup fields: contracts, cycle, status, service days, tags, and day swap</summary>
+            <div class="setup-grid">
+                <label>
+                    <div class="small muted">Contract name</div>
+                    @if (IsProvider)
+                    {
+                        <input class="input" value="@ContractName" disabled />
+                    }
+                    else
+                    {
+                        <InputSelect class="input" @bind-Value="ContractName">
+                            @foreach (var option in ContractOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    }
+                </label>
+                <label>
+                    <div class="small muted">Program type</div>
+                    <InputSelect class="input" @bind-Value="ProgramType">
+                        @foreach (var option in ProgramTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Meal Type</div>
+                    <InputSelect class="input" @bind-Value="PrimaryMealType">
+                        @foreach (var option in MealTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Diet type</div>
+                    <InputSelect class="input" @bind-Value="DietType">
+                        @foreach (var option in DietTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Cycle</div>
+                    <InputSelect class="input" @bind-Value="Cycle">
+                        @foreach (var option in CycleOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Menu Duration/Type</div>
+                    <InputSelect class="input" @bind-Value="MenuDurationType">
+                        @foreach (var option in MenuDurationTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Meal Served Format</div>
+                    <InputSelect class="input" @bind-Value="MealServedFormat">
+                        @foreach (var option in MealServedFormatOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Status</div>
+                    <InputSelect class="input" @bind-Value="MenuStatus">
+                        @foreach (var option in MenuStatusOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Cycle start date</div>
+                    <InputDate class="input" @bind-Value="CycleStartDate" />
+                </label>
+                <label>
+                    <div class="small muted">Cycle end date</div>
+                    <InputDate class="input" @bind-Value="CycleEndDate" />
+                </label>
+                <label>
+                    <div class="small muted">Status date</div>
+                    <InputDate class="input" @bind-Value="StatusDate" />
+                </label>
+                <label>
+                    <div class="small muted">Submitted to NYC Aging</div>
+                    <InputDate class="input" @bind-Value="SubmittedToNycAgingOn" />
+                </label>
+                <label>
+                    <div class="small muted">Submitted to</div>
+                    <InputText class="input" @bind-Value="SubmittedTo" />
+                </label>
+                <label>
+                    <div class="small muted">Nutrition Advisor</div>
+                    <InputSelect class="input" @bind-Value="NutritionAdvisor">
+                        @foreach (var option in NutritionAdvisorOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </InputSelect>
+                </label>
+                <label>
+                    <div class="small muted">Created by</div>
+                    <InputText class="input" @bind-Value="CreatedBy" />
+                </label>
+            </div>
+
+            <div class="setup-options">
+                <div>
+                    <div class="small muted">Select contract(s)</div>
+                    @if (IsProvider)
+                    {
+                        <span class="status-badge brand">@AppMode.ProviderContract</span>
+                    }
+                    else
+                    {
+                        <div class="checkbox-row">
+                            @foreach (var contract in ContractOptions)
+                            {
+                                var currentContract = contract;
+                                <label class="checkbox-chip">
+                                    <input type="checkbox" checked="@SelectedContracts.Contains(currentContract)" @onchange="eventArgs => SetContract(currentContract, eventArgs.Value is bool value && value)" />
+                                    <span>@currentContract</span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="small muted">Days of service</div>
+                    <div class="checkbox-row">
+                        @for (var index = 0; index < ServiceDayLabels.Length; index++)
+                        {
+                            var currentIndex = index;
+                            <label class="checkbox-chip">
+                                <input type="checkbox" checked="@ServiceDaysEnabled[currentIndex]" @onchange="eventArgs => SetServiceDay(currentIndex, eventArgs.Value is bool value && value)" />
+                                <span>@ServiceDayLabels[currentIndex]</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div>
+                    <div class="small muted">Copy active week to</div>
+                    <div class="segmented-control compact">
+                        @for (var week = 1; week <= 6; week++)
+                        {
+                            var targetWeek = week;
+                            if (targetWeek == ActiveWeek)
+                            {
+                                continue;
+                            }
+                            <button type="button" @onclick="() => CopyCurrentWeekTo(targetWeek)">Week @targetWeek</button>
+                        }
+                    </div>
+                </div>
+                <div>
+                    <div class="small muted">Swap Week day from / to</div>
+                    <div class="swap-row">
+                        <InputSelect class="input compact-input" @bind-Value="SwapDayFrom">
+                            @foreach (var option in DaySwapOptions)
+                            {
+                                <option value="@option.Index">@option.Label</option>
+                            }
+                        </InputSelect>
+                        <InputSelect class="input compact-input" @bind-Value="SwapDayTo">
+                            @foreach (var option in DaySwapOptions)
+                            {
+                                <option value="@option.Index">@option.Label</option>
+                            }
+                        </InputSelect>
+                        <button type="button" class="secondary-button" @onclick="SwapSelectedDays">Swap days</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="small muted">Menu Tags</div>
+                    <div class="checkbox-row">
+                        @foreach (var tag in MenuTagOptions)
+                        {
+                            var currentTag = tag;
+                            <label class="checkbox-chip">
+                                <input type="checkbox" checked="@SelectedMenuTags.Contains(currentTag)" @onchange="eventArgs => SetMenuTag(currentTag, eventArgs.Value is bool value && value)" />
+                                <span>@currentTag</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div>
+                    <div class="small muted">Completed weeks</div>
+                    <div class="tag-list">
+                        @for (var week = 1; week <= 6; week++)
+                        {
+                            <span class="status-badge @(CompletedWeeks.Contains(week) ? "good" : "")">Week @week @(CompletedWeeks.Contains(week) ? "complete" : "open")</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <div class="planner-helper">
+            <span class="muted small">@StartDate.ToString("MMM d") to @EndDate.ToString("MMM d") · @GetServiceDaySummary() · Esc clears selection · Backspace removes · 1-6 switches weeks</span>
+            @if (!string.IsNullOrWhiteSpace(PlannerMessage))
+            {
+                <span class="status-badge warn">@PlannerMessage</span>
+            }
+        </div>
+    </section>
+
+    <div class="columns planner-layout">
+        <section class="section calendar-panel">
+            <div class="section-header">
+                <div>
+                    <h3 style="margin-bottom: 6px">@MealLabel(SelectedMealView) planning board</h3>
+                    <p class="muted" style="margin: 0">
+                        Plan the selected meal across the week, then place recipes into the component rows.
+                    </p>
+                </div>
+                <div class="hero-actions">
+                    <span class="status-badge brand">Week @ActiveWeek</span>
+                    <span class="status-badge brand">@DaysPerWeek-day cycle</span>
+                </div>
+            </div>
+            <div class="planner-alerts">
+                @if (Analysis is null)
+                {
+                    <div class="empty-state" style="margin-top: 0; padding: 12px 14px">Nutrition checks will appear after you place recipes.</div>
+                }
+                else
+                {
+                    @foreach (var warning in PlannerWarnings)
+                    {
+                        <span class="status-badge @(warning.Status == "pass" ? "good" : warning.Status == "warn" ? "warn" : "bad")">@warning.Label</span>
+                    }
+                }
+            </div>
+
+            <div class="meal-board-tabs">
+                @foreach (var mealView in VisibleMealViews)
+                {
+                    <button type="button" class="meal-board-tab @(SelectedMealView == mealView ? "active" : "")" @onclick="() => SetSelectedMealView(mealView)">@MealLabel(mealView)</button>
+                }
+                <div class="meal-board-help muted small">Select a component cell, then add a recipe from the gallery.</div>
+            </div>
+
+            <div class="calendar-scroll">
+                <div class="calendar-grid" style="grid-template-columns: 140px repeat(@DaysPerWeek, 170px)">
+                    <div class="calendar-corner"></div>
+                    @for (var dayIndex = 0; dayIndex < CalendarDays.Count; dayIndex++)
+                    {
+                        var date = CalendarDays[dayIndex];
+                        <div class="calendar-day-header">
+                            <div class="day-header-top">
+                                <div class="day-label">@date.ToString("ddd")</div>
+                                <div class="day-swap-controls">
+                                    <button type="button" class="tiny-button secondary-button" title="Move left" disabled="@(dayIndex == 0)" @onclick="() => SwapDays(dayIndex, dayIndex - 1)">←</button>
+                                    <button type="button" class="tiny-button secondary-button" title="Move right" disabled="@(dayIndex == CalendarDays.Count - 1)" @onclick="() => SwapDays(dayIndex, dayIndex + 1)">→</button>
+                                </div>
+                            </div>
+                            <div class="date-label">@date.ToString("MMM d")</div>
+                        </div>
+                    }
+
+                    @foreach (var component in MealComponentsFor(SelectedMealView))
+                    {
+                        var currentComponent = component;
+                        <div class="meal-label @MealSlotClass(SelectedMealView)" title="@component.Description">
+                            <div>
+                                <div class="meal-label-title">@component.Label</div>
+                                <div class="meal-label-subtitle">@component.HelpText</div>
+                            </div>
+                        </div>
+                        @for (var dayIndex = 0; dayIndex < CalendarDays.Count; dayIndex++)
+                        {
+                            var currentDayIndex = dayIndex;
+                            var selectedMealSlot = MealViewToSlot(SelectedMealView);
+                            var assigned = GetCellRecipe(currentDayIndex, selectedMealSlot, currentComponent.Key);
+                            var isActive = SelectedCell?.DayIndex == currentDayIndex && SelectedCell?.MealSlot == selectedMealSlot && SelectedCell?.ComponentKey == currentComponent.Key;
+                            var dropKey = $"{SelectedMealView.ToString().ToLowerInvariant()}_{currentComponent.Key}";
+                            <div class="calendar-cell @MealSlotClass(selectedMealSlot) @(isActive ? "active" : "") @(HoveredCell?.DayIndex == currentDayIndex && HoveredCell?.MealSlot == selectedMealSlot && HoveredCell?.ComponentKey == currentComponent.Key ? "drop-target" : "") @(assigned is not null ? "filled" : "")"
+                                 role="button"
+                                 tabindex="0"
+                                 @onclick="() => SelectCell(currentDayIndex, selectedMealSlot, currentComponent.Key)"
+                                 data-dnd-select-cell="true"
+                                 data-dnd-dropzone="true"
+                                 data-day-index="@currentDayIndex"
+                                 data-meal-slot="@dropKey"
+                                 draggable="false"
+                                 @ondragenter="() => SetHoverCell(currentDayIndex, selectedMealSlot, currentComponent.Key)"
+                                 @ondragleave="() => ClearHoverCell()"
+                                 @ondragover:preventDefault="true">
+                                @if (assigned is null)
+                                {
+                                    <div class="calendar-placeholder">
+                                        <span class="meal-badge @MealSlotClass(selectedMealSlot)">@component.ShortLabel</span>
+                                        <span>@GetCalendarPlaceholder(selectedMealSlot, currentComponent.Key)</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="scheduled-card" data-dnd-payload="@($"scheduled:{assigned.RecipeId}:{currentDayIndex}:{SelectedMealView.ToString().ToLowerInvariant()}:{currentComponent.Key}")" draggable="true">
+                                        <span class="meal-badge @MealSlotClass(selectedMealSlot)">@component.ShortLabel</span>
+                                        <strong>@assigned.RecipeName</strong>
+                                        <div class="muted small">@assigned.Category · @assigned.MealType</div>
+                                        <div class="drag-row">
+                                            <div class="drag-handle card-drag-handle" aria-hidden="true">↕ move</div>
+                                            @if (!currentComponent.Key.Equals("alternate", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => MarkAsAlternate(currentDayIndex, selectedMealSlot, currentComponent.Key)">Alternate</button>
+                                            }
+                                            <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => RemoveRecipe(currentDayIndex, selectedMealSlot, currentComponent.Key)">Remove</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
+
+        <div class="grid planner-sidebar" style="gap: 18px">
+            <section class="section planner-gallery-panel">
+                <div class="section-header planner-gallery-header">
+                    <div>
+                        <h3 style="margin-bottom: 6px">Recipe gallery</h3>
+                    </div>
+                    <InputText class="input compact-input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search recipes" />
+                </div>
+                <div class="gallery-filter-grid">
+                    <label>
+                        <div class="small muted">Recipe View</div>
+                        <InputSelect class="input compact-input" @bind-Value="RecipeViewMode">
+                            @foreach (var option in RecipeViewOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label>
+                        <div class="small muted">Filter By</div>
+                        <InputSelect class="input compact-input" Value="RecipeFilterGroup" ValueChanged="@(EventCallback.Factory.Create<string>(this, OnRecipeFilterGroupChanged))" ValueExpression="@(() => RecipeFilterGroup)">
+                            @foreach (var option in RecipeFilterGroupOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label>
+                        <div class="small muted">Filter value</div>
+                        <InputSelect class="input compact-input" @bind-Value="RecipeFilterValue">
+                            @foreach (var option in RecipeFilterValueOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="checkbox-chip gallery-favorite-filter">
+                        <input type="checkbox" @bind="FavoritesOnly" />
+                        <span>My Favorites</span>
+                    </label>
+                </div>
+
+                <div class="section-inner">
+                    <div class="section-header">
+                        <h4>@GallerySectionTitle</h4>
+                        <div class="hero-actions">
+                            @if (!string.IsNullOrWhiteSpace(CurrentGalleryContext))
+                            {
+                                <span class="status-badge brand">@CurrentGalleryContext</span>
+                            }
+                            <span class="status-badge brand">@GalleryRecipes.Count() recipes</span>
+                        </div>
+                    </div>
+                    <div class="toggle-row">
+                        <button type="button" class="@(RecipeGalleryMode == RecommendedGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(RecommendedGalleryMode)">Recommended</button>
+                        <button type="button" class="@(RecipeGalleryMode == BreakfastMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(BreakfastMeal)">Breakfast</button>
+                        <button type="button" class="@(RecipeGalleryMode == LunchMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(LunchMeal)">Lunch</button>
+                        <button type="button" class="@(RecipeGalleryMode == DinnerMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(DinnerMeal)">Dinner</button>
+                        <button type="button" class="@(RecipeGalleryMode == AllGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(AllGalleryMode)">All</button>
+                    </div>
+                    <div class="table-list planner-recipe-list compact-recipe-picker">
+                        @foreach (var recipe in VisibleGalleryRecipes)
+                        {
+                            <div class="recipe-picker-row" role="button" tabindex="0" @onclick="() => SelectRecipeFromGallery(recipe)" data-dnd-select-recipe="true" data-dnd-payload="@($"recipe:{recipe.RecipeId}")" draggable="true">
+                                <div class="recipe-picker-main">
+                                    <div class="table-title-row">
+                                        <strong>@recipe.RecipeName</strong>
+                                        @if (recipe.IsFavorite)
+                                        {
+                                            <span class="recipe-favorite-badge">Favorite</span>
+                                        }
+                                    </div>
+                                    <div class="recipe-picker-meta">#@recipe.RecipeId · @recipe.MealType · @recipe.Category · @(recipe.ServingSize ?? "1 serving")</div>
+                                    <div class="recipe-picker-tags">
+                                        @foreach (var tag in GalleryTags(recipe))
+                                        {
+                                            <span class="tag-chip">@tag</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="recipe-picker-nutrition" aria-label="Recipe nutrition">
+                                    <span><strong>@recipe.Calories</strong> kcal</span>
+                                    <span><strong>@recipe.SodiumMg</strong> mg sodium</span>
+                                    <span><strong>@recipe.ProteinG</strong> g protein</span>
+                                    <span><strong>@recipe.FiberG</strong> g fiber</span>
+                                </div>
+                                <div class="recipe-picker-actions">
+                                    <span class="drag-handle card-drag-handle" aria-hidden="true">Drag</span>
+                                    <button type="button" class="button tiny-button" @onclick:stopPropagation="true" @onclick="() => AssignRecipe(recipe)">Add</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (HasMoreGalleryRecipes)
+                    {
+                        <div class="hero-actions" style="justify-content: center">
+                            <button type="button" class="ghost-button" @onclick="ShowMoreGalleryRecipes">Show more recipes</button>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="section planner-details-panel">
+            <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Planner details</h3>
+                        </div>
+                <div class="toggle-row">
+                    <button type="button" class="@(PlannerSidebarTab == PlannerInsightsTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerInsightsTab)">Insights</button>
+                    <button type="button" class="@(PlannerSidebarTab == PlannerTrayTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerTrayTab)">Tray</button>
+                    <button type="button" class="@(PlannerSidebarTab == PlannerSummaryTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerSummaryTab)">Summary</button>
+                </div>
+            </div>
+
+            @if (PlannerSidebarTab == PlannerInsightsTab && Analysis is not null)
+            {
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Suggested next</h3>
+                        <p class="muted" style="margin: 0">
+                                @(LastPlacedRecipe is null
+                                    ? "Assign a recipe to see targeted suggestions here."
+                                    : $"Based on {LastPlacedRecipe.RecipeName}, these recipes are a good next step.")
+                            </p>
+                        </div>
+                    </div>
+                    <div class="status-stack">
+                        @foreach (var item in RecommendedItems.Take(4))
+                        {
+                            <div class="status-row">
+                                <div>
+                                    <strong>@item.Recipe.RecipeName</strong>
+                                    <div class="muted small">@item.Recipe.MealType · @item.Recipe.Category</div>
+                                    <div class="muted small">@string.Join(" · ", item.Reasons)</div>
+                                </div>
+                                <div class="hero-actions">
+                                    <span class="status-badge brand">@item.Score.ToString("0.0")</span>
+                        <button type="button" class="button small-button" @onclick="() => SelectRecipeFromGallery(item.Recipe)">Use</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <NutritionPanel Totals="@Analysis.Totals" Statuses="@Analysis.Statuses" MealRequirements="@Analysis.MealRequirements" OverallStatus="@Analysis.OverallStatus" OnRecipeSelected="SelectRecipeFromGallery" />
+                <section class="section">
+                    <h3>Rule-based revisions</h3>
+                    <div class="section-inner">
+                        @foreach (var group in RevisionSuggestions)
+                        {
+                            <div>
+                                <div class="status-badge brand" style="margin-bottom: 8px">@group.Key</div>
+                                <div class="status-stack">
+                                    @foreach (var item in group.Value)
+                                    {
+                                        <div class="status-row">
+                                            <div>
+                                                <strong>@item.Recipe.RecipeName</strong>
+                                                <div class="muted small">@string.Join(" · ", item.Reasons)</div>
+                                            </div>
+                                            <button type="button" class="ghost-button tiny-button" @onclick="() => SelectRecipeFromGallery(item.Recipe)">Use</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h3>Similar historical menus</h3>
+                    <div class="status-stack">
+                        @foreach (var menu in SimilarMenus)
+                        {
+                            <div class="status-row">
+                                <div>
+                                    <strong>@menu.Name</strong>
+                                    <div class="muted small">@menu.ServiceDate.ToString("MMM d, yyyy")</div>
+                                </div>
+                                <StatusPill Status="@(menu.PassesNutrition ? "good" : "warn")" Label="@menu.Similarity.ToString("0.00")" />
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+            else if (PlannerSidebarTab == PlannerInsightsTab)
+            {
+                <div class="empty-state planner-empty-state">
+                    Select a component cell, then add a recipe from the gallery. Nutrition checks, suggestions, and similar menus will appear here after the first recipe is placed.
+                </div>
+            }
+
+            @if (PlannerSidebarTab == PlannerTrayTab)
+            {
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Current week tray</h3>
+                            <p class="muted" style="margin: 0">Quick access to the recipes already placed in Week @ActiveWeek.</p>
+                        </div>
+                        <StatusPill Status="brand" Label="@($"{CurrentWeekItems.Count()} placed")" />
+                    </div>
+                    <div class="recipe-grid" style="margin-top: 18px">
+                        @foreach (var item in CurrentWeekItems)
+                        {
+                            <div class="recipe-card" role="button" tabindex="0" data-dnd-select-recipe="true" data-dnd-payload="@($"tray:{item.Recipe.RecipeId}:{item.DayIndex}:{item.MealSlot.ToString().ToLowerInvariant()}:{item.ComponentKey}")" draggable="true">
+                                <div class="recipe-card-head">
+                                    <div>
+                                        <strong>@item.Recipe.RecipeName</strong>
+                                        <div class="muted small">Day @(item.DayIndex + 1) · @MealLabel(item.MealSlot) · @item.ComponentKey</div>
+                                    </div>
+                                    <div class="hero-actions">
+                                        <button type="button" class="ghost-button tiny-button" @onclick:stopPropagation="true" @onclick="() => SelectTrayItem(item)">Go</button>
+                                        <button type="button" class="ghost-button tiny-button" @onclick:stopPropagation="true" @onclick="() => RemoveTrayItem(item)">Remove</button>
+                                    </div>
+                                </div>
+                                <div class="drag-row">
+                                    <div class="drag-handle card-drag-handle" aria-hidden="true">↕ move</div>
+                                </div>
+                                <div class="tag-list">
+                                    @foreach (var tag in item.Recipe.Tags.Take(3))
+                                    {
+                                        <span class="tag-chip">@tag</span>
+                                    }
+                                </div>
+                                <div class="nutrition-strip">
+                                    <span>@item.Recipe.SodiumMg mg sodium</span>
+                                    <span>@item.Recipe.ProteinG g protein</span>
+                                </div>
+                            </div>
+                        }
+                        @if (!CurrentWeekItems.Any())
+                        {
+                            <div class="empty-state">No recipes placed in this week yet.</div>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (PlannerSidebarTab == PlannerSummaryTab)
+            {
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Week summary</h3>
+                            <p class="muted" style="margin: 0">A quick glance at the current menu mix.</p>
+                        </div>
+                    </div>
+                    <div class="summary-grid">
+                        @foreach (var item in BuildWeeklySummary())
+                        {
+                            <div class="summary-card">
+                                <div class="summary-value">@item.Value</div>
+                                <div class="muted small">@item.Key</div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+            </section>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private static readonly MealSlot[] MealSlots = [MealSlot.Breakfast, MealSlot.Lunch, MealSlot.Dinner];
+    private const string BreakfastMeal = "breakfast";
+    private const string LunchMeal = "lunch";
+    private const string DinnerMeal = "dinner";
+    private const string RecommendedGalleryMode = "recommended";
+    private const string AllGalleryMode = "all";
+    private const string PlannerInsightsTab = "insights";
+    private const string PlannerTrayTab = "tray";
+    private const string PlannerSummaryTab = "summary";
+    private const string FullCoverageMode = "Breakfast + Lunch + Dinner";
+    private static readonly string[] MealCoverageOptions = LegacyReferenceData.MenuCoverageOptions;
+    private static DateTime StartOfServiceWeek(DateTime date)
+    {
+        var daysSinceMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.Date.AddDays(-daysSinceMonday);
+    }
+
+    private static readonly MealComponentDefinition[] BaseMealComponents =
+    [
+        new("appetizer", "Appetizer", "Optional", true),
+        new("entree", "Entrée", "Required: 1 serving", false),
+        new("grains", "Grains", "Required: 1 serving", false),
+        new("vegetable", "Vegetable", "Required: 1 serving non-starchy", false),
+        new("fruit", "Fruit", "Required: 1 serving", false),
+        new("dairy", "Dairy or non-dairy equivalent", "Required: 1 serving", false),
+        new("juice-dessert", "Juice or Dessert", "Optional", true),
+        new("condiments", "Condiments", "Optional", true),
+        new("alternate", "Alternate", "Optional", true)
+    ];
+    private readonly Dictionary<int, Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>>> SchedulesByWeek = new();
+
+    private string MenuName { get; set; } = "Weekly Menu";
+    private string ContractName { get; set; } = LegacyReferenceData.ContractNames[0];
+    private string ProgramType { get; set; } = "Congregate";
+    private string PrimaryMealType { get; set; } = "Lunch";
+    private string MenuCoverage { get; set; } = FullCoverageMode;
+    private string DietType { get; set; } = "Regular";
+    private string MenuFormat { get; set; } = "Weekly";
+    private string MenuDurationType { get; set; } = "Regular";
+    private string MealServedFormat { get; set; } = "Hot";
+    private List<string> SelectedMenuTags { get; set; } = [];
+    private string Cycle { get; set; } = "Spring/Summer";
+    private DateTime? CycleStartDate { get; set; } = StartOfServiceWeek(DateTime.Today);
+    private DateTime? CycleEndDate { get; set; } = StartOfServiceWeek(DateTime.Today).AddMonths(6);
+    private string MenuStatus { get; set; } = "Draft";
+    private DateTime? StatusDate { get; set; } = DateTime.Today;
+    private DateTime? SubmittedToNycAgingOn { get; set; }
+    private string NutritionAdvisor { get; set; } = LegacyReferenceData.NutritionAdvisors[0];
+    private string SubmittedTo { get; set; } = "NYC Aging";
+    private string CreatedBy { get; set; } = "Menu staff";
+    private DateTime StartDate { get; set; } = StartOfServiceWeek(DateTime.Today);
+    private int DaysPerWeek { get; set; } = 5;
+    private int ActiveWeek { get; set; } = 1;
+    private List<string> SelectedContracts { get; set; } = [LegacyReferenceData.ContractNames[0]];
+    private List<int> CompletedWeeks { get; set; } = [];
+    private string SearchText { get; set; } = string.Empty;
+    private bool Saving { get; set; }
+    private string? PlannerMessage { get; set; }
+    private ElementReference _plannerRoot;
+    private IJSObjectReference? _dragDropModule;
+    private DotNetObjectReference<MenuPlanner>? _dotNetRef;
+    private CellSelection? SelectedCell { get; set; }
+    private CellSelection? HoveredCell { get; set; }
+    private List<RecipeDto> AllRecipes { get; set; } = new();
+    private List<RecommendationItemDto> RecommendedItems { get; set; } = new();
+    private List<int> PopularRecipeIds { get; set; } = new();
+    private MenuAnalysisDto? Analysis { get; set; }
+    private List<SimilarMenuDto> SimilarMenus { get; set; } = new();
+    private Dictionary<string, List<RecommendationItemDto>> RevisionSuggestions { get; set; } = new();
+    private RecipeDto? LastPlacedRecipe { get; set; }
+    private string RecipeGalleryMode { get; set; } = RecommendedGalleryMode;
+    private string RecipeViewMode { get; set; } = "[All]";
+    private string RecipeFilterGroup { get; set; } = "[Select]";
+    private string RecipeFilterValue { get; set; } = "[Select]";
+    private bool FavoritesOnly { get; set; }
+    private int GalleryVisibleCount { get; set; } = 12;
+    private string PlannerSidebarTab { get; set; } = PlannerInsightsTab;
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+    private bool[] ServiceDaysEnabled { get; set; } = [true, true, true, true, true, false, false];
+    private string SelectedMealView { get; set; } = BreakfastMeal;
+    private int SwapDayFrom { get; set; }
+    private int SwapDayTo { get; set; } = 1;
+
+    private static readonly string[] ServiceDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    private static readonly string[] ProgramTypeOptions = LegacyReferenceData.ProgramTypes;
+    private static readonly string[] DietTypeOptions = LegacyReferenceData.DietTypes;
+    private static readonly string[] MealTypeOptions = LegacyReferenceData.MealTypes;
+    private static readonly string[] MenuFormatOptions = ["Weekly", "Cycle", "3-month cycle", "6-month cycle"];
+    private static readonly string[] MenuDurationTypeOptions = LegacyReferenceData.MenuDurationTypes;
+    private static readonly string[] MealServedFormatOptions = LegacyReferenceData.MealServedFormats;
+    private static readonly string[] MenuStatusOptions = LegacyReferenceData.MenuStatuses;
+    private static readonly string[] CycleOptions = LegacyReferenceData.Cycles;
+    private static readonly string[] ContractOptions = LegacyReferenceData.ContractNames;
+    private static readonly string[] MenuTagOptions = LegacyReferenceData.MenuTags;
+    private static readonly string[] NutritionAdvisorOptions = LegacyReferenceData.NutritionAdvisors;
+    private static readonly string[] RecipeViewOptions = LegacyReferenceData.RecipeViewOptions;
+    private static readonly string[] RecipeFilterGroupOptions = ["[Select]", "Meal Components", "Critical Nutrients", "Cuisines", "Dietary Restrictions"];
+
+    private Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>> CurrentSchedule => SchedulesByWeek[ActiveWeek];
+
+    private DateTime EndDate => StartDate.AddDays(DaysPerWeek - 1);
+
+    private List<DateTime> CalendarDays => Enumerable.Range(0, DaysPerWeek).Select(offset => StartDate.AddDays(offset)).ToList();
+
+    private IEnumerable<string> VisibleMealViews => CoverageMealViews(MenuCoverage);
+
+    private static IEnumerable<MealComponentDefinition> MealComponentsFor(string mealView) => BaseMealComponents;
+
+    private IEnumerable<RecipeDto> GalleryRecipes =>
+        AllRecipes.Where(recipe => recipe.Matches(SearchText))
+                  .Where(MatchesRecipeView)
+                  .Where(MatchesLegacyRecipeFilter)
+                  .Where(recipe => !FavoritesOnly || recipe.IsFavorite)
+                  .Where(recipe => RecipeGalleryMode == AllGalleryMode || RecipeGalleryMode == RecommendedGalleryMode || recipe.MealType.Equals(RecipeGalleryMode, StringComparison.OrdinalIgnoreCase))
+                  .OrderBy(recipe => RecommendedItems.Any(item => item.Recipe.RecipeId == recipe.RecipeId) ? 0 : 1)
+                  .ThenBy(recipe => SelectedCell is not null && PreferredComponentsForRecipe(recipe).Contains(SelectedCell.Value.ComponentKey) ? 0 : 1)
+                  .ThenBy(recipe => recipe.RecipeName);
+
+    private IEnumerable<RecipeDto> VisibleGalleryRecipes => GalleryRecipes.Take(GalleryVisibleCount);
+
+    private bool HasMoreGalleryRecipes => GalleryRecipes.Count() > GalleryVisibleCount;
+
+    private string GallerySectionTitle => RecipeGalleryMode switch
+    {
+        BreakfastMeal => "Breakfast recipes",
+        LunchMeal => "Lunch recipes",
+        DinnerMeal => "Dinner recipes",
+        AllGalleryMode => "All recipes",
+        _ => "Recommended recipes"
+    };
+
+    private IEnumerable<(string Label, string Status)> PlannerWarnings =>
+        Analysis?.Statuses
+            .Where(status => !status.Status.Equals("pass", StringComparison.OrdinalIgnoreCase))
+            .Select(status => (
+                Label: $"{status.NutrientKey.Replace("_", " ")}: {status.Status}",
+                Status: status.Status))
+            .Take(3) ?? [];
+
+    private string? CurrentGalleryContext => SelectedCell is null
+        ? null
+        : $"{MealLabel(SelectedCell.Value.MealSlot)} · {SelectedCell.Value.ComponentKey} focus";
+
+    private static IEnumerable<string> GalleryTags(RecipeDto recipe) =>
+        recipe.Tags
+            .Concat(recipe.NutrientClaims)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3);
+
+    private IEnumerable<(int Index, string Label)> DaySwapOptions =>
+        CalendarDays.Select((date, index) => (index, $"{date:ddd} {date:MMM d}"));
+
+    private IEnumerable<string> RecipeFilterValueOptions
+    {
+        get
+        {
+            if (RecipeFilterGroup.Equals("[Select]", StringComparison.OrdinalIgnoreCase))
+            {
+                return ["[Select]"];
+            }
+
+            var group = LegacyReferenceData.RecipeFilterGroups
+                .FirstOrDefault(item => item.Label.Equals(RecipeFilterGroup, StringComparison.OrdinalIgnoreCase));
+            return group is null ? ["[Select]"] : ["[Select]", .. group.Options];
+        }
+    }
+
+    private int PlacedCount => CurrentSchedule.Values.Sum(slots => slots.Values.Sum(componentMap => componentMap.Values.Count(recipe => recipe is not null)));
+
+    private IEnumerable<MenuPlacement> CurrentWeekItems =>
+        CurrentSchedule
+            .OrderBy(pair => pair.Key)
+            .SelectMany(pair => pair.Value.OrderBy(slot => Array.IndexOf(MealSlots, slot.Key))
+                                            .SelectMany(slot => slot.Value.OrderBy(component => ComponentOrder(component.Key))
+                                                                        .Where(component => component.Value is not null)
+                                                                        .Select(component => new MenuPlacement(pair.Key, slot.Key, component.Key, component.Value!))));
+
+    private Dictionary<string, int> BuildWeeklySummary()
+    {
+        var items = CurrentWeekItems.ToList();
+        var recipes = items.Select(item => item.Recipe).ToList();
+        return new Dictionary<string, int>
+        {
+            ["Breakfast items"] = items.Count(item => item.MealSlot == MealSlot.Breakfast),
+            ["Lunch items"] = items.Count(item => item.MealSlot == MealSlot.Lunch),
+            ["Dinner items"] = items.Count(item => item.MealSlot == MealSlot.Dinner),
+            ["Unique recipes"] = recipes.Select(item => item.RecipeId).Distinct().Count(),
+            ["Entrees"] = recipes.Count(recipe => recipe.Category.Equals("entree", StringComparison.OrdinalIgnoreCase)),
+            ["Sides"] = recipes.Count(recipe => recipe.Category.Equals("side", StringComparison.OrdinalIgnoreCase)),
+            ["Grains"] = recipes.Count(recipe => recipe.Category.Equals("grain", StringComparison.OrdinalIgnoreCase)),
+            ["Fruit/veg"] = recipes.Count(recipe => recipe.Category.Equals("fruit", StringComparison.OrdinalIgnoreCase) || recipe.Category.Equals("vegetable", StringComparison.OrdinalIgnoreCase))
+        };
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        EnsureScheduleShape();
+        AllRecipes = await Api.GetRecipesAsync(true);
+        var analytics = await Api.GetAnalyticsAsync();
+        PopularRecipeIds = analytics.TopRecipes.Select(item => item.RecipeId).ToList();
+        ApplyRoleDefaults();
+        ApplyDraft(Drafts.Consume());
+        ApplyRoleDefaults();
+        await RefreshInsightsAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyRoleDefaults();
+    }
+
+    private void ApplyRoleDefaults()
+    {
+        if (!IsProvider)
+        {
+            return;
+        }
+
+        ContractName = AppMode.ProviderContract;
+        CreatedBy = AppMode.ProviderContract;
+        SelectedContracts = [AppMode.ProviderContract];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            _dragDropModule = await Js.InvokeAsync<IJSObjectReference>("import", "./js/dragDropBridge.js");
+            await _dragDropModule.InvokeVoidAsync("attachDragPayloads", _plannerRoot, _dotNetRef);
+        }
+        catch
+        {
+            _dragDropModule = null;
+            _dotNetRef?.Dispose();
+            _dotNetRef = null;
+        }
+    }
+
+    private void EnsureScheduleShape()
+    {
+        for (var week = 1; week <= 6; week++)
+        {
+            if (!SchedulesByWeek.ContainsKey(week))
+            {
+                SchedulesByWeek[week] = CreateBlankSchedule();
+                continue;
+            }
+
+            foreach (var dayIndex in Enumerable.Range(0, DaysPerWeek))
+            {
+                if (!SchedulesByWeek[week].ContainsKey(dayIndex))
+                {
+                    SchedulesByWeek[week][dayIndex] = CreateEmptyDay();
+                }
+            }
+        }
+    }
+
+    private Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>> CreateBlankSchedule() =>
+        Enumerable.Range(0, DaysPerWeek).ToDictionary(dayIndex => dayIndex, _ => CreateEmptyDay());
+
+    private Dictionary<MealSlot, Dictionary<string, RecipeDto?>> CreateEmptyDay() =>
+        new()
+        {
+            [MealSlot.Breakfast] = CreateMealComponentMap(),
+            [MealSlot.Lunch] = CreateMealComponentMap(),
+            [MealSlot.Dinner] = CreateMealComponentMap()
+        };
+
+    private static Dictionary<string, RecipeDto?> CreateMealComponentMap() =>
+        BaseMealComponents.ToDictionary(component => component.Key, _ => (RecipeDto?)null);
+
+    private async Task RefreshInsightsAsync()
+    {
+        var selectedIds = CurrentSchedule.Values
+            .SelectMany(slots => slots.Values.SelectMany(componentMap => componentMap.Values))
+            .Where(recipe => recipe is not null)
+            .Select(recipe => recipe!.RecipeId)
+            .ToList();
+
+        if (!selectedIds.Any())
+        {
+            LastPlacedRecipe = null;
+            RecommendedItems = PopularRecipeIds.Count > 0
+                ? AllRecipes.Where(recipe => PopularRecipeIds.Contains(recipe.RecipeId))
+                    .OrderBy(recipe => PopularRecipeIds.IndexOf(recipe.RecipeId))
+                    .Take(6)
+                    .Select(recipe => new RecommendationItemDto
+                    {
+                        Recipe = recipe,
+                        Score = Math.Max(1, 6 - PopularRecipeIds.IndexOf(recipe.RecipeId)),
+                        Reasons = ["Frequently used in historical menus"]
+                    })
+                    .ToList()
+                : AllRecipes.Take(6)
+                    .Select(recipe => new RecommendationItemDto
+                    {
+                        Recipe = recipe,
+                        Score = 1,
+                        Reasons = ["Approved recipe"]
+                    })
+                    .ToList();
+            Analysis = null;
+            SimilarMenus.Clear();
+            RevisionSuggestions.Clear();
+            return;
+        }
+
+        var analysisTask = Api.AnalyzeMenuAsync(new MenuAnalysisRequest
+        {
+            RecipeIds = selectedIds,
+            Items = BuildMenuItems(CurrentSchedule)
+        });
+        var autocompleteTask = Api.GetAutocompleteAsync(selectedIds);
+        var revisionsTask = Api.GetRevisionsAsync(selectedIds);
+        var similarTask = Api.GetSimilarMenusAsync(selectedIds);
+
+        await Task.WhenAll(analysisTask, autocompleteTask, revisionsTask, similarTask);
+
+        Analysis = analysisTask.Result;
+        RecommendedItems = autocompleteTask.Result;
+        RevisionSuggestions = revisionsTask.Result.Suggestions;
+        SimilarMenus = similarTask.Result;
+    }
+
+    private void SetDaysPerWeek(int days)
+    {
+        if (DaysPerWeek == days) return;
+        DaysPerWeek = days;
+        ResizeSchedules(days);
+        ServiceDaysEnabled = days == 7
+            ? [true, true, true, true, true, true, true]
+            : [true, true, true, true, true, false, false];
+        StateHasChanged();
+        _ = RefreshInsightsAsync();
+    }
+
+    private void OnStartDateChanged(DateTime date)
+    {
+        StartDate = StartOfServiceWeek(date);
+    }
+
+    private void SetActiveWeek(int week)
+    {
+        ActiveWeek = week;
+        EnsureScheduleShape();
+        _ = RefreshInsightsAsync();
+    }
+
+    private void SelectCell(int dayIndex, MealSlot mealSlot, string componentKey)
+    {
+        SelectedCell = new CellSelection(dayIndex, mealSlot, componentKey);
+        SelectedMealView = MealSlotToGalleryMode(mealSlot);
+        SetRecipeGalleryMode(MealSlotToGalleryMode(mealSlot));
+    }
+
+    private Task SelectRecipeFromGallery(RecipeDto recipe) => AssignRecipe(recipe);
+
+    private void SetRecipeGalleryMode(string mealMode)
+    {
+        RecipeGalleryMode = mealMode;
+        GalleryVisibleCount = 12;
+    }
+
+    private Task OnRecipeFilterGroupChanged(string group)
+    {
+        RecipeFilterGroup = group;
+        RecipeFilterValue = "[Select]";
+        GalleryVisibleCount = 12;
+        return Task.CompletedTask;
+    }
+
+    private void SetPlannerSidebarTab(string tab)
+    {
+        PlannerSidebarTab = tab;
+    }
+
+    private void SetSelectedMealView(string mealView)
+    {
+        if (!VisibleMealViews.Contains(mealView))
+        {
+            return;
+        }
+
+        SelectedMealView = mealView;
+        SetRecipeGalleryMode(mealView);
+    }
+
+    private Task OnMenuCoverageChanged(string coverage)
+    {
+        MenuCoverage = coverage;
+        if (!VisibleMealViews.Contains(SelectedMealView))
+        {
+            SelectedMealView = VisibleMealViews.FirstOrDefault() ?? BreakfastMeal;
+        }
+
+        SetRecipeGalleryMode(SelectedMealView);
+        return Task.CompletedTask;
+    }
+
+    private void ApplyDraft(MenuCreateRequest? draft)
+    {
+        if (draft is null)
+        {
+            return;
+        }
+
+        MenuName = draft.Name;
+        ContractName = draft.ContractName ?? ContractName;
+        ProgramType = draft.ProgramType ?? ProgramType;
+        if (!string.IsNullOrWhiteSpace(draft.MealType) && MealTypeOptions.Contains(draft.MealType))
+        {
+            PrimaryMealType = draft.MealType;
+        }
+
+        if (!string.IsNullOrWhiteSpace(draft.MenuCoverage))
+        {
+            MenuCoverage = draft.MenuCoverage;
+        }
+        else if (!string.IsNullOrWhiteSpace(draft.MealType) && MealCoverageOptions.Contains(draft.MealType))
+        {
+            MenuCoverage = draft.MealType;
+        }
+        DietType = draft.DietType ?? DietType;
+        MenuFormat = draft.MenuFormat ?? MenuFormat;
+        MenuDurationType = draft.MenuDurationType ?? MenuDurationType;
+        MealServedFormat = draft.MealServedFormat ?? MealServedFormat;
+        SelectedMenuTags = draft.MenuTags.Count > 0 ? [.. draft.MenuTags] : SelectedMenuTags;
+        Cycle = draft.Cycle ?? Cycle;
+        CycleStartDate = draft.CycleStartDate ?? draft.StartDate;
+        CycleEndDate = draft.CycleEndDate ?? draft.EndDate;
+        SelectedContracts = draft.Contracts.Any() ? [.. draft.Contracts] : SelectedContracts;
+        CompletedWeeks = draft.CompletedWeeks.Any() ? [.. draft.CompletedWeeks] : CompletedWeeks;
+        MenuStatus = draft.Status;
+        StatusDate = draft.StatusDate ?? draft.StartDate;
+        SubmittedToNycAgingOn = draft.SubmittedToNycAgingOn ?? SubmittedToNycAgingOn;
+        NutritionAdvisor = draft.NutritionAdvisor ?? NutritionAdvisor;
+        SubmittedTo = draft.SubmittedTo ?? SubmittedTo;
+        CreatedBy = draft.CreatedBy ?? CreatedBy;
+        StartDate = draft.StartDate;
+        DaysPerWeek = draft.DaysPerWeek;
+        ActiveWeek = draft.CycleWeek;
+
+        ResizeSchedules(DaysPerWeek);
+        EnsureScheduleShape();
+
+        foreach (var item in draft.Items)
+        {
+            var recipe = AllRecipes.FirstOrDefault(candidate => candidate.RecipeId == item.RecipeId);
+            if (recipe is null || item.DayIndex < 0 || item.DayIndex >= DaysPerWeek)
+            {
+                continue;
+            }
+
+            if (TryParsePlanCell(item.MealSlot, out var planCell) && recipe.IsSuitableForMealSlot(planCell.MealSlot))
+            {
+                var componentKey = NormalizeComponentKey(planCell.ComponentKey);
+                if (CurrentSchedule[item.DayIndex][planCell.MealSlot].ContainsKey(componentKey))
+                {
+                    CurrentSchedule[item.DayIndex][planCell.MealSlot][componentKey] = recipe;
+                }
+            }
+        }
+
+        PlannerMessage = $"Loaded draft from {draft.Name}.";
+    }
+
+    private void ShowMoreGalleryRecipes()
+    {
+        GalleryVisibleCount += 12;
+    }
+
+    private static string MealSlotToGalleryMode(MealSlot mealSlot) => mealSlot switch
+    {
+        MealSlot.Breakfast => BreakfastMeal,
+        MealSlot.Lunch => LunchMeal,
+        MealSlot.Dinner => DinnerMeal,
+        _ => RecommendedGalleryMode
+    };
+
+    private static MealSlot MapMealTypeToSlot(string mealType) => mealType.ToLowerInvariant() switch
+    {
+        BreakfastMeal => MealSlot.Breakfast,
+        LunchMeal => MealSlot.Lunch,
+        DinnerMeal => MealSlot.Dinner,
+        _ => MealSlot.Lunch
+    };
+
+    private void SetHoverCell(int dayIndex, MealSlot mealSlot, string componentKey)
+    {
+        HoveredCell = new CellSelection(dayIndex, mealSlot, componentKey);
+    }
+
+    private void ClearHoverCell()
+    {
+        HoveredCell = null;
+    }
+
+    [JSInvokable]
+    public async Task HandleExternalDrop(string payload, int dayIndex, string mealSlot)
+    {
+        if (!TryParsePlanCell(mealSlot, out var targetCell))
+        {
+            return;
+        }
+
+        var parts = (payload ?? string.Empty).Split(':', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            return;
+        }
+
+        if (!int.TryParse(parts[1], out var recipeId))
+        {
+            return;
+        }
+
+        var recipe = AllRecipes.FirstOrDefault(candidate => candidate.RecipeId == recipeId);
+        if (recipe is null)
+        {
+            return;
+        }
+
+        if (!recipe.IsSuitableForMealSlot(targetCell.MealSlot))
+        {
+            PlannerMessage = $"{recipe.RecipeName} cannot be placed in {MealLabel(targetCell.MealSlot).ToLowerInvariant()}.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (parts.Length >= 5 && int.TryParse(parts[2], out var sourceDayIndex) && TryParsePlanCell($"{parts[3]}_{parts[4]}", out var sourceCell))
+        {
+            CurrentSchedule[sourceDayIndex][sourceCell.MealSlot][sourceCell.ComponentKey] = null;
+        }
+
+        CurrentSchedule[dayIndex][targetCell.MealSlot][targetCell.ComponentKey] = recipe;
+        SelectedCell = null;
+        LastPlacedRecipe = recipe;
+        PlannerSidebarTab = PlannerInsightsTab;
+        PlannerMessage = null;
+        await RefreshInsightsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CopyCurrentWeekTo(int targetWeek)
+    {
+        if (targetWeek == ActiveWeek)
+        {
+            return;
+        }
+
+        SchedulesByWeek[targetWeek] = CloneSchedule(CurrentSchedule);
+        _ = RefreshInsightsAsync();
+    }
+
+    private void SwapDays(int leftDayIndex, int rightDayIndex)
+    {
+        if (leftDayIndex < 0 || rightDayIndex < 0 || leftDayIndex >= DaysPerWeek || rightDayIndex >= DaysPerWeek || leftDayIndex == rightDayIndex)
+        {
+            return;
+        }
+
+        foreach (var mealSlot in MealSlots)
+        {
+            foreach (var component in BaseMealComponents)
+            {
+                (CurrentSchedule[leftDayIndex][mealSlot][component.Key], CurrentSchedule[rightDayIndex][mealSlot][component.Key]) =
+                    (CurrentSchedule[rightDayIndex][mealSlot][component.Key], CurrentSchedule[leftDayIndex][mealSlot][component.Key]);
+            }
+        }
+
+        _ = RefreshInsightsAsync();
+    }
+
+    private void SwapSelectedDays()
+    {
+        if (SwapDayFrom == SwapDayTo)
+        {
+            PlannerMessage = "Choose two different days to swap.";
+            return;
+        }
+
+        SwapDays(SwapDayFrom, SwapDayTo);
+        PlannerMessage = $"Swapped {ServiceDayLabels[SwapDayFrom]} and {ServiceDayLabels[SwapDayTo]} for Week {ActiveWeek}.";
+    }
+
+    private async Task AssignRecipe(RecipeDto recipe)
+    {
+        if (SelectedCell is not null)
+        {
+            if (!recipe.IsSuitableForMealSlot(SelectedCell.Value.MealSlot))
+            {
+                PlannerMessage = $"{recipe.RecipeName} cannot be placed in {MealLabel(SelectedCell.Value.MealSlot).ToLowerInvariant()}.";
+                return;
+            }
+
+            CurrentSchedule[SelectedCell.Value.DayIndex][SelectedCell.Value.MealSlot][SelectedCell.Value.ComponentKey] = recipe;
+            SelectedCell = null;
+            LastPlacedRecipe = recipe;
+            PlannerSidebarTab = PlannerInsightsTab;
+            PlannerMessage = null;
+            await RefreshInsightsAsync();
+            return;
+        }
+
+        foreach (var mealSlot in VisibleMealViews.Select(MealViewToSlot))
+        {
+            for (var dayIndex = 0; dayIndex < DaysPerWeek; dayIndex++)
+            {
+                if (!recipe.IsSuitableForMealSlot(mealSlot))
+                {
+                    continue;
+                }
+
+                foreach (var component in PreferredComponentsForRecipe(recipe))
+                {
+                    if (CurrentSchedule[dayIndex][mealSlot][component] is null)
+                    {
+                        CurrentSchedule[dayIndex][mealSlot][component] = recipe;
+                        SelectedCell = null;
+                        LastPlacedRecipe = recipe;
+                        PlannerSidebarTab = PlannerInsightsTab;
+                        PlannerMessage = null;
+                        await RefreshInsightsAsync();
+                        return;
+                    }
+                }
+            }
+        }
+
+        PlannerMessage = $"No open component slot found for {recipe.RecipeName}.";
+    }
+
+    private async Task RemoveRecipe(int dayIndex, MealSlot mealSlot, string componentKey)
+    {
+        CurrentSchedule[dayIndex][mealSlot][componentKey] = null;
+        if (SelectedCell?.DayIndex == dayIndex && SelectedCell?.MealSlot == mealSlot && SelectedCell?.ComponentKey == componentKey)
+        {
+            SelectedCell = null;
+        }
+        LastPlacedRecipe = null;
+        PlannerMessage = null;
+        await RefreshInsightsAsync();
+    }
+
+    private async Task MarkAsAlternate(int dayIndex, MealSlot mealSlot, string componentKey)
+    {
+        var recipe = CurrentSchedule[dayIndex][mealSlot][componentKey];
+        if (recipe is null)
+        {
+            return;
+        }
+
+        if (CurrentSchedule[dayIndex][mealSlot]["alternate"] is not null)
+        {
+            PlannerMessage = "The alternate row already has an item for this day and meal.";
+            return;
+        }
+
+        CurrentSchedule[dayIndex][mealSlot][componentKey] = null;
+        CurrentSchedule[dayIndex][mealSlot]["alternate"] = recipe;
+        PlannerMessage = $"{recipe.RecipeName} moved to Alternate.";
+        await RefreshInsightsAsync();
+    }
+
+    private void ClearWeek()
+    {
+        SchedulesByWeek[ActiveWeek] = CreateBlankSchedule();
+        SelectedCell = null;
+        PlannerMessage = null;
+        _ = RefreshInsightsAsync();
+    }
+
+    private async Task ClearSelectedDay()
+    {
+        if (SelectedCell is null)
+        {
+            return;
+        }
+
+        var dayIndex = SelectedCell.Value.DayIndex;
+        foreach (var mealSlot in MealSlots)
+        {
+            foreach (var component in BaseMealComponents)
+            {
+                CurrentSchedule[dayIndex][mealSlot][component.Key] = null;
+            }
+        }
+
+        SelectedCell = null;
+        PlannerMessage = null;
+        await RefreshInsightsAsync();
+    }
+
+    private async Task RemoveTrayItem(MenuPlacement item)
+    {
+        CurrentSchedule[item.DayIndex][item.MealSlot][item.ComponentKey] = null;
+        if (SelectedCell?.DayIndex == item.DayIndex && SelectedCell?.MealSlot == item.MealSlot && SelectedCell?.ComponentKey == item.ComponentKey)
+        {
+            SelectedCell = null;
+        }
+        LastPlacedRecipe = null;
+        PlannerMessage = null;
+        await RefreshInsightsAsync();
+    }
+
+    private void SelectTrayItem(MenuPlacement item)
+    {
+        SelectedCell = new CellSelection(item.DayIndex, item.MealSlot, item.ComponentKey);
+        SelectedMealView = MealSlotToGalleryMode(item.MealSlot);
+        SetRecipeGalleryMode(MealSlotToGalleryMode(item.MealSlot));
+    }
+
+    private void SetServiceDay(int index, bool enabled)
+    {
+        if (index < 0 || index >= ServiceDaysEnabled.Length)
+        {
+            return;
+        }
+
+        ServiceDaysEnabled[index] = enabled;
+    }
+
+    private void SetContract(string contract, bool selected)
+    {
+        if (selected && !SelectedContracts.Contains(contract))
+        {
+            SelectedContracts.Add(contract);
+        }
+        else if (!selected)
+        {
+            SelectedContracts.Remove(contract);
+        }
+
+        if (!SelectedContracts.Any())
+        {
+            SelectedContracts.Add(LegacyReferenceData.ContractNames[0]);
+        }
+
+        ContractName = string.Join(", ", SelectedContracts);
+    }
+
+    private void SetMenuTag(string tag, bool selected)
+    {
+        if (selected && !SelectedMenuTags.Contains(tag))
+        {
+            SelectedMenuTags.Add(tag);
+        }
+        else if (!selected)
+        {
+            SelectedMenuTags.Remove(tag);
+        }
+    }
+
+    private async Task RunMenuCheck()
+    {
+        await RefreshInsightsAsync();
+        PlannerMessage = Analysis is null
+            ? "Add recipes before running How is my menu?"
+            : $"How is my menu? {Analysis.OverallStatus}. Review nutrition and component guidance below.";
+    }
+
+    private void MarkActiveWeekComplete()
+    {
+        if (!CompletedWeeks.Contains(ActiveWeek))
+        {
+            CompletedWeeks.Add(ActiveWeek);
+            CompletedWeeks.Sort();
+        }
+
+        MenuStatus = CompletedWeeks.Count >= 6 ? "Completed" : "Draft";
+        PlannerMessage = $"Week {ActiveWeek} marked complete.";
+    }
+
+    private void MakeActiveWeekIncomplete()
+    {
+        CompletedWeeks.Remove(ActiveWeek);
+        MenuStatus = "Incomplete";
+        PlannerMessage = $"Week {ActiveWeek} marked incomplete.";
+    }
+
+    private string GetCalendarPlaceholder(MealSlot mealSlot, string componentKey)
+    {
+        var component = BaseMealComponents.FirstOrDefault(item => item.Key == componentKey);
+        var componentName = string.IsNullOrWhiteSpace(component.Key) ? componentKey : component.Label;
+        if (SelectedCell is not null && SelectedCell.Value.MealSlot == mealSlot && SelectedCell.Value.ComponentKey == componentKey)
+        {
+            return $"Choose {componentName.ToLowerInvariant()}";
+        }
+
+        return component.Optional ? $"{componentName} (optional)" : componentName;
+    }
+
+    private static string GetMealBadge(MealSlot mealSlot) => mealSlot switch
+    {
+        MealSlot.Breakfast => "B",
+        MealSlot.Lunch => "L",
+        MealSlot.Dinner => "D",
+        _ => "?"
+    };
+
+    private static string MealSlotClass(MealSlot mealSlot) => mealSlot switch
+    {
+        MealSlot.Breakfast => "meal-breakfast",
+        MealSlot.Lunch => "meal-lunch",
+        MealSlot.Dinner => "meal-dinner",
+        _ => string.Empty
+    };
+
+    private static string MealSlotClass(string mealView) => MealSlotClass(MealViewToSlot(mealView));
+
+    private static string MealLabel(string mealView) => MealViewToSlot(mealView).ToString();
+
+    private static string MealLabel(MealSlot mealSlot) => mealSlot.ToString();
+
+    private static MealSlot MealViewToSlot(string mealView) => mealView.ToLowerInvariant() switch
+    {
+        BreakfastMeal => MealSlot.Breakfast,
+        LunchMeal => MealSlot.Lunch,
+        DinnerMeal => MealSlot.Dinner,
+        _ => MealSlot.Lunch
+    };
+
+    private static IEnumerable<string> CoverageMealViews(string coverage) => coverage switch
+    {
+        "Breakfast + Lunch" => [BreakfastMeal, LunchMeal],
+        "Lunch + Dinner" => [LunchMeal, DinnerMeal],
+        "Breakfast only" => [BreakfastMeal],
+        "Lunch only" => [LunchMeal],
+        "Dinner only" => [DinnerMeal],
+        _ => [BreakfastMeal, LunchMeal, DinnerMeal]
+    };
+
+    private static IEnumerable<string> PreferredComponentsForRecipe(RecipeDto recipe)
+    {
+        var category = recipe.Category.ToLowerInvariant();
+        return category switch
+        {
+            "entree" => ["entree", "alternate", "appetizer"],
+            "fruit" => ["fruit", "juice-dessert", "alternate"],
+            "vegetable" or "side" => ["vegetable", "appetizer", "alternate", "condiments"],
+            "grain" => ["grains", "alternate", "entree"],
+            "milk" or "dairy" => ["dairy", "condiments", "alternate"],
+            _ => ["entree", "vegetable", "fruit", "grains", "dairy", "alternate", "condiments", "juice-dessert"]
+        };
+    }
+
+    private static int ComponentOrder(string componentKey)
+    {
+        var index = Array.FindIndex(BaseMealComponents, component => component.Key == NormalizeComponentKey(componentKey));
+        return index < 0 ? 999 : index;
+    }
+
+    private static string NormalizeComponentKey(string componentKey) => componentKey.ToLowerInvariant() switch
+    {
+        "grain" => "grains",
+        "grains" => "grains",
+        "juice" => "juice-dessert",
+        "dessert" => "juice-dessert",
+        "juice-dessert" => "juice-dessert",
+        "fruit / vegetables" => "vegetable",
+        "fruit-vegetable" => "vegetable",
+        "milk" => "dairy",
+        "main" => "entree",
+        "side" => "vegetable",
+        _ => componentKey.ToLowerInvariant()
+    };
+
+    private static bool TryParsePlanCell(string value, out PlanCell planCell)
+    {
+        planCell = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var parts = value.Split('_', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        if (!Enum.TryParse<MealSlot>(parts[0], true, out var mealSlot))
+        {
+            return false;
+        }
+
+        planCell = new PlanCell(mealSlot, NormalizeComponentKey(parts[1]));
+        return true;
+    }
+
+    private static PlanCell? ParseMenuSlot(string? mealSlot)
+        => TryParsePlanCell(mealSlot ?? string.Empty, out var planCell) ? planCell : null;
+
+    private RecipeDto? GetCellRecipe(int dayIndex, MealSlot mealSlot, string componentKey)
+        => CurrentSchedule.TryGetValue(dayIndex, out var day)
+            && day.TryGetValue(mealSlot, out var meal)
+            && meal.TryGetValue(componentKey, out var recipe)
+                ? recipe
+                : null;
+
+    private bool MatchesRecipeView(RecipeDto recipe)
+    {
+        return RecipeViewMode switch
+        {
+            "[All]" => true,
+            "Public" => recipe.IsPublic,
+            "Sponsor Private" => !recipe.IsPublic && recipe.ContributedBy?.Contains("Sponsor", StringComparison.OrdinalIgnoreCase) == true,
+            "Caterer Private" => !recipe.IsPublic && recipe.ContributedBy?.Contains("Cater", StringComparison.OrdinalIgnoreCase) == true,
+            _ => true
+        };
+    }
+
+    private bool MatchesLegacyRecipeFilter(RecipeDto recipe)
+    {
+        if (RecipeFilterGroup.Equals("[Select]", StringComparison.OrdinalIgnoreCase) || RecipeFilterValue.Equals("[Select]", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var normalizedValue = LegacyReferenceData.NormalizeFilterValue(RecipeFilterValue);
+        var haystack = LegacyReferenceData.NormalizeFilterValue(string.Join(" ", new[]
+        {
+            recipe.RecipeName,
+            recipe.MealType,
+            recipe.Category,
+            string.Join(" ", recipe.Tags),
+            string.Join(" ", recipe.NutrientClaims)
+        }));
+
+        if (LegacyFilterAliases.TryGetValue(normalizedValue, out var aliases))
+        {
+            return aliases.Any(alias => haystack.Contains(alias, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return haystack.Contains(normalizedValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly Dictionary<string, string[]> LegacyFilterAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["entree"] = ["entree", "protein", "main"],
+        ["entr e"] = ["entree", "protein", "main"],
+        ["appetizer"] = ["appetizer", "side"],
+        ["vegetable"] = ["vegetable", "side"],
+        ["fruit"] = ["fruit"],
+        ["grains"] = ["grain", "whole grain", "rice", "barley", "toast", "roll"],
+        ["milk yogurt"] = ["milk", "dairy", "yogurt", "calcium"],
+        ["juice or dessert"] = ["juice", "dessert", "fruit"],
+        ["condiments"] = ["condiment", "dressing"],
+        ["breakfast"] = ["breakfast"],
+        ["non starchy vegetable"] = ["vegetable", "broccoli", "beans", "spinach", "cauliflower"],
+        ["starchy vegetable"] = ["potato", "sweet potato", "corn"],
+        ["plant based entree"] = ["vegetarian", "tofu", "lentil", "plant"],
+        ["whole grains"] = ["whole grain", "grain", "rice", "barley", "wheat"],
+        ["very low sodium"] = ["low sodium"],
+        ["good source of calcium"] = ["calcium", "milk", "dairy"],
+        ["good source of vitamin c"] = ["vitamin c", "fruit", "vegetable"],
+        ["good source of fiber"] = ["fiber", "whole grain", "fruit", "vegetable"],
+        ["vegetarian"] = ["vegetarian", "tofu", "lentil"],
+        ["dairy free"] = ["dairy free", "non dairy"]
+    };
+
+    private Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>> CloneSchedule(Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>> schedule) =>
+        schedule.ToDictionary(
+            day => day.Key,
+            day => day.Value.ToDictionary(slot => slot.Key, slot => slot.Value.ToDictionary(component => component.Key, component => component.Value)));
+
+    private async Task HandlePlannerKeyDown(KeyboardEventArgs args)
+    {
+        switch (args.Key)
+        {
+            case "Escape":
+                SelectedCell = null;
+                PlannerMessage = null;
+                await InvokeAsync(StateHasChanged);
+                break;
+            case "Delete":
+            case "Backspace":
+                if (SelectedCell is not null)
+                {
+                    await RemoveRecipe(SelectedCell.Value.DayIndex, SelectedCell.Value.MealSlot, SelectedCell.Value.ComponentKey);
+                }
+                break;
+            case "1":
+            case "2":
+            case "3":
+            case "4":
+            case "5":
+            case "6":
+                if (int.TryParse(args.Key, out var week) && week >= 1 && week <= 6)
+                {
+                    SetActiveWeek(week);
+                }
+                break;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dragDropModule is not null)
+        {
+            try
+            {
+                await _dragDropModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Navigation can disconnect the circuit before the bridge is torn down.
+            }
+        }
+
+        _dotNetRef?.Dispose();
+    }
+
+    private void ResizeSchedules(int daysPerWeek)
+    {
+        foreach (var week in SchedulesByWeek.Keys.ToList())
+        {
+            var existing = SchedulesByWeek[week];
+            var resized = Enumerable.Range(0, daysPerWeek).ToDictionary(
+                dayIndex => dayIndex,
+                dayIndex => existing.TryGetValue(dayIndex, out var day) ? day : CreateEmptyDay());
+            SchedulesByWeek[week] = resized;
+        }
+
+        SelectedCell = null;
+        HoveredCell = null;
+    }
+
+    private Task SaveMenu() => SaveMenuAsync(exitAfterSave: false);
+
+    private Task SaveAndExit() => SaveMenuAsync(exitAfterSave: true);
+
+    private async Task SaveMenuAsync(bool exitAfterSave)
+    {
+        Saving = true;
+        try
+        {
+            var items = BuildMenuItems(CurrentSchedule);
+            var result = await Api.CreateMenuAsync(new MenuCreateRequest
+            {
+                Name = MenuName,
+                ContractName = ContractName,
+                ProgramType = ProgramType,
+                MealType = PrimaryMealType,
+                MenuCoverage = MenuCoverage,
+                DietType = DietType,
+                MenuFormat = MenuFormat,
+                MenuDurationType = MenuDurationType,
+                MealServedFormat = MealServedFormat,
+                MenuTags = [.. SelectedMenuTags],
+                Cycle = Cycle,
+                CycleStartDate = CycleStartDate,
+                CycleEndDate = CycleEndDate,
+                Contracts = [.. SelectedContracts],
+                CompletedWeeks = [.. CompletedWeeks],
+                Status = MenuStatus,
+                StatusDate = StatusDate,
+                SubmittedToNycAgingOn = SubmittedToNycAgingOn,
+                NutritionAdvisor = NutritionAdvisor,
+                SubmittedTo = SubmittedTo,
+                CreatedBy = CreatedBy,
+                StartDate = StartDate,
+                EndDate = EndDate,
+                DaysPerWeek = DaysPerWeek,
+                CycleWeek = ActiveWeek,
+                Notes = "Created from the menu builder.",
+                Items = items
+            });
+
+            Navigation.NavigateTo(exitAfterSave ? "/menus" : $"/menus/{result.Id}");
+        }
+        finally
+        {
+            Saving = false;
+        }
+    }
+
+    private static List<MenuItemInput> BuildMenuItems(Dictionary<int, Dictionary<MealSlot, Dictionary<string, RecipeDto?>>> schedule)
+    {
+        var items = new List<MenuItemInput>();
+        var position = 1;
+
+        foreach (var dayIndex in schedule.Keys.OrderBy(key => key))
+        {
+            foreach (var mealSlot in MealSlots)
+            {
+                foreach (var component in BaseMealComponents)
+                {
+                    var recipe = schedule[dayIndex][mealSlot][component.Key];
+                    if (recipe is null)
+                    {
+                        continue;
+                    }
+
+                    items.Add(new MenuItemInput
+                    {
+                        RecipeId = recipe.RecipeId,
+                        Position = position++,
+                        DayIndex = dayIndex,
+                        MealSlot = $"{mealSlot.ToString().ToLowerInvariant()}_{component.Key}",
+                        ComponentKey = component.Key,
+                        IsAlternate = component.Key.Equals("alternate", StringComparison.OrdinalIgnoreCase),
+                        SourceType = "manual"
+                    });
+                }
+            }
+        }
+
+        return items;
+    }
+
+    private string GetServiceDaySummary()
+    {
+        var selectedDays = ServiceDaysEnabled
+            .Select((enabled, index) => new { enabled, index })
+            .Where(item => item.enabled)
+            .Select(item => ServiceDayLabels[item.index])
+            .ToList();
+
+        return selectedDays.Count switch
+        {
+            0 => "No service days selected",
+            7 => "7-day service",
+            5 when selectedDays.SequenceEqual(["Mon", "Tue", "Wed", "Thu", "Fri"]) => "Mon-Fri service",
+            _ => string.Join(", ", selectedDays)
+        };
+    }
+
+    private readonly record struct CellSelection(int DayIndex, MealSlot MealSlot, string ComponentKey);
+    private readonly record struct DragSelection(RecipeDto Recipe, int? SourceDayIndex, MealSlot? SourceMealSlot, string? SourceComponentKey);
+    private readonly record struct MenuPlacement(int DayIndex, MealSlot MealSlot, string ComponentKey, RecipeDto Recipe);
+    private readonly record struct MealComponentDefinition(string Key, string Label, string HelpText, bool Optional)
+    {
+        public string ShortLabel => Label.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? Label;
+        public string Description => HelpText;
+    }
+    private readonly record struct PlanCell(MealSlot MealSlot, string ComponentKey);
+}

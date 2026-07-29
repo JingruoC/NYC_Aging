@@ -1,0 +1,171 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject AppModeService AppMode
+@implements IDisposable
+
+<div class="app-shell">
+    <header class="topbar">
+        <div>
+            <div class="eyebrow">NYC Aging</div>
+            <h1>Menu planning workspace</h1>
+        </div>
+        <div class="topbar-actions">
+            <label class="role-switcher">
+                <span>View as</span>
+                <select value="@AppMode.CurrentRole" @onchange="OnRoleChanged">
+                    <option value="@AppRole.Admin">Admin / Department staff</option>
+                    <option value="@AppRole.Provider">Provider / Caterer</option>
+                </select>
+            </label>
+            <nav class="nav primary-nav" aria-label="Primary navigation">
+                <NavLink href="/" Match="NavLinkMatch.All">Home</NavLink>
+                <a class="@PrimaryClass("recipes")" href="/recipes/home">Recipe</a>
+                <a class="@PrimaryClass("menus")" href="/menus/list">Menus</a>
+                <NavLink href="/reports">Reports</NavLink>
+                <NavLink href="/resources">Resources</NavLink>
+            </nav>
+        </div>
+    </header>
+
+    @if (SecondaryItems.Any())
+    {
+        <nav class="subnav" aria-label="@($"{ActiveSectionLabel} navigation")">
+            <span class="subnav-label">@ActiveSectionLabel</span>
+            @foreach (var item in SecondaryItems)
+            {
+                <NavLink href="@item.Href" Match="@item.Match">@item.Label</NavLink>
+            }
+        </nav>
+    }
+
+    <CascadingValue Value="AppMode.CurrentRole">
+        <main class="content">
+            @Body
+        </main>
+    </CascadingValue>
+</div>
+
+@code {
+    private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+
+    private bool IsSection(string section)
+    {
+        var path = CurrentPath;
+        return section switch
+        {
+            "recipes" => path == "/recipes" || path.StartsWith("/recipes/"),
+            "menus" => path == "/menus" || path.StartsWith("/menus/") || path.StartsWith("/sample-menus/"),
+            _ => false
+        };
+    }
+
+    private string PrimaryClass(string section) => IsSection(section) ? "active" : string.Empty;
+
+    private string ActiveSectionLabel => IsSection("recipes")
+        ? "Recipe"
+        : IsSection("menus")
+            ? "Menus"
+            : CurrentPath.StartsWith("/resources") ? "Resources" : string.Empty;
+
+    private IReadOnlyList<SubnavItem> SecondaryItems
+    {
+        get
+        {
+            if (IsSection("recipes"))
+            {
+                var items = new List<SubnavItem>
+                {
+                    new("Recipe Home", "/recipes/home", NavLinkMatch.All),
+                    new("Add Recipe", "/recipes/new", NavLinkMatch.All),
+                    new("Recipe List", "/recipes", NavLinkMatch.All),
+                    new("My Favorites", "/recipes/favorites", NavLinkMatch.All)
+                };
+
+                if (AppMode.IsAdmin)
+                {
+                    items.Insert(2, new("Recipe Review", "/recipes/review", NavLinkMatch.All));
+                }
+
+                return items;
+            }
+
+            if (IsSection("menus"))
+            {
+                if (AppMode.IsProvider)
+                {
+                    return
+                    [
+                        new("Build Menu", "/menus/new/blank", NavLinkMatch.All),
+                        new("My Drafts", "/menus/drafts", NavLinkMatch.All),
+                        new("My Menus", "/menus/list", NavLinkMatch.All),
+                        new("Sample Menus", "/menus/new/sample", NavLinkMatch.All)
+                    ];
+                }
+
+                return
+                [
+                    new("Add New", "/menus/new/blank", NavLinkMatch.All),
+                    new("Menu List", "/menus/list", NavLinkMatch.All),
+                    new("Sample Menus", "/menus/new/sample", NavLinkMatch.All)
+                ];
+            }
+
+            if (CurrentPath.StartsWith("/resources"))
+            {
+                return [];
+            }
+
+            return [];
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        AppMode.Changed += HandleAppModeChanged;
+    }
+
+    private void HandleAppModeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRoleChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<AppRole>(args.Value?.ToString(), out var role))
+        {
+            AppMode.SetRole(role);
+            RedirectIfCurrentPageIsHiddenForRole();
+        }
+    }
+
+    private void RedirectIfCurrentPageIsHiddenForRole()
+    {
+        if (AppMode.IsAdmin)
+        {
+            if (CurrentPath.StartsWith("/menus/favorites", StringComparison.OrdinalIgnoreCase)
+                || CurrentPath.StartsWith("/menus/drafts", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo("/menus/list");
+            }
+
+            return;
+        }
+
+        if (!AppMode.IsProvider)
+        {
+            return;
+        }
+
+        if (CurrentPath.StartsWith("/menus/favorites", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/menus/list");
+        }
+    }
+
+    public void Dispose()
+    {
+        AppMode.Changed -= HandleAppModeChanged;
+    }
+
+    private sealed record SubnavItem(string Label, string Href, NavLinkMatch Match);
+}

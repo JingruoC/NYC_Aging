@@ -1,0 +1,474 @@
+@page "/recipes/{RecipeId:int}"
+@page "/recipes/{RecipeId:int}/edit"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Recipe detail</div>
+                <h2 style="margin-bottom: 6px">@((IsEditRoute ? "Edit recipe" : "View recipe"))</h2>
+                <p class="muted" style="margin: 0">Recipe record, ingredients, scaling, tags, and nutrition values.</p>
+            </div>
+            <div class="hero-actions">
+                <a class="ghost-button" href="/recipes">Back to recipes</a>
+                @if (!IsEditRoute)
+                {
+                    <button type="button" class="ghost-button" @onclick="PrintRecipe">Print Recipe</button>
+                    <button type="button" class="ghost-button" @onclick="ToggleFavorite">@(_editRecipe.IsFavorite ? "Remove from my favorite" : "Add to my favorite")</button>
+                    <button type="button" class="secondary-button" @onclick="DeleteRecipe">Delete</button>
+                    <a class="button" href="@($"/recipes/{RecipeId}/edit")">Edit recipe</a>
+                }
+                else
+                {
+                    <button type="button" class="button" @onclick="SaveRecipe">Save changes</button>
+                }
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="empty-state">Loading recipe...</div>
+        }
+        else if (_recipe is null)
+        {
+            <div class="empty-state">Recipe not found.</div>
+        }
+        else
+        {
+            <div class="workspace-summary" style="margin-top: 16px">
+                <div class="workspace-summary-item">
+                    <div class="small muted">Recipe ID</div>
+                    <div class="summary-value">#@_recipe.RecipeId</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Meal type</div>
+                    <div class="summary-value">@_recipe.MealType</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Category</div>
+                    <div class="summary-value">@_recipe.Category</div>
+                </div>
+                <div class="workspace-summary-item">
+                    <div class="small muted">Approval</div>
+                    <div class="summary-value">@ApprovalLabel(_recipe)</div>
+                </div>
+            </div>
+
+            <div class="columns cols-2" style="margin-top: 16px">
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">@(_recipe.RecipeName)</h3>
+                        </div>
+                    </div>
+
+                    <div class="status-stack">
+                        <div class="status-row">
+                            <span>Yield</span>
+                            <span>@_recipe.YieldServings</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Serving size</span>
+                            <span>@(_recipe.ServingSize ?? "1 serving")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Portion size</span>
+                            <span>@(_recipe.ServingSize ?? "1 serving")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Recipe view</span>
+                            <span>@(_recipe.IsPublic ? "Public" : "Sponsor Private")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Approval</span>
+                            <span class="status-badge @(_recipe.IsApproved ? "good" : "warn")">@ApprovalLabel(_recipe)</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Approval status</span>
+                            <span>@ApprovalLabel(_recipe)</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Meal type</span>
+                            <span class="status-badge brand">@_recipe.MealType</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Category</span>
+                            <span class="status-badge brand">@_recipe.Category</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Last updated by</span>
+                            <span>@(_recipe.ContributedBy ?? "NYC Aging Nutrition Unit")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Last updated on</span>
+                            <span>@_recipe.CreatedOn?.ToString("MM/dd/yyyy")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Contributed by</span>
+                            <span>@(_recipe.ContributedBy ?? "N/A")</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Categories</span>
+                            <span>@CategoryBreadcrumb</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Rating</span>
+                            <span>☆☆☆☆☆</span>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+                    {
+                        <div class="empty-state" style="padding: 10px 12px; margin-top: 12px">@_actionMessage</div>
+                    }
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Recipe fields</h3>
+                                <p class="muted" style="margin: 0">These are editable so staff can correct the recipe record without leaving the catalog.</p>
+                            </div>
+                        </div>
+
+                        <div class="planner-form-grid">
+                            <div>
+                                <div class="small muted">Recipe name</div>
+                                <InputText class="input" @bind-Value="_editRecipe.RecipeName" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Meal type</div>
+                                <InputText class="input" @bind-Value="_editRecipe.MealType" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Category</div>
+                                <InputText class="input" @bind-Value="_editRecipe.Category" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Approved</div>
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsApproved" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Calories</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.Calories" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Sodium mg</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.SodiumMg" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Protein g</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.ProteinG" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Fiber g</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.FiberG" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Fat g</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.FatG" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div style="grid-column: 1 / -1">
+                                <div class="small muted">Tags, comma separated</div>
+                                <InputText class="input" @bind-Value="_tagsText" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Serving size</div>
+                                <InputText class="input" @bind-Value="_editRecipe.ServingSize" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Yield servings</div>
+                                <InputNumber class="input" @bind-Value="_editRecipe.YieldServings" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Favorite</div>
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsFavorite" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Public</div>
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsPublic" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div style="grid-column: 1 / -1">
+                                <div class="small muted">Ingredients, comma separated</div>
+                                <InputText class="input" @bind-Value="_ingredientsText" disabled="@(!IsEditRoute)" />
+                            </div>
+                            <div style="grid-column: 1 / -1">
+                                <div class="small muted">Nutrient claims, comma separated</div>
+                                <InputText class="input" @bind-Value="_claimsText" disabled="@(!IsEditRoute)" />
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Nutrition snapshot</h3>
+                        </div>
+                    </div>
+
+                    <div class="workspace-summary">
+                        <div class="workspace-summary-item">
+                            <div class="small muted">Calories</div>
+                            <div class="summary-value">@_editRecipe.Calories</div>
+                        </div>
+                        <div class="workspace-summary-item">
+                            <div class="small muted">Sodium</div>
+                            <div class="summary-value">@_editRecipe.SodiumMg mg</div>
+                        </div>
+                        <div class="workspace-summary-item">
+                            <div class="small muted">Protein</div>
+                            <div class="summary-value">@_editRecipe.ProteinG g</div>
+                        </div>
+                        <div class="workspace-summary-item">
+                            <div class="small muted">Fiber</div>
+                            <div class="summary-value">@_editRecipe.FiberG g</div>
+                        </div>
+                    </div>
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Scale to serving(s)</h3>
+                                <p class="muted" style="margin: 0">@(_recipe.ScaleNote ?? "Enter the serving count used by production.")</p>
+                            </div>
+                        </div>
+                        <div class="report-form compact-form">
+                            <label>
+                                <div class="small muted">Serving count</div>
+                                <InputNumber class="input" @bind-Value="_scaleServings" />
+                            </label>
+                            <button type="button" class="button" @onclick="ScaleRecipe">Go</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_scaleMessage))
+                        {
+                            <div class="empty-state" style="padding: 10px 12px; margin-top: 10px">@_scaleMessage</div>
+                        }
+                        @if (_scaledIngredients.Any())
+                        {
+                            <div class="table-list" style="margin-top: 12px">
+                                @foreach (var ingredient in _scaledIngredients)
+                                {
+                                    <div class="table-row compact-row">
+                                        <div class="table-main">@ingredient</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Nutrition Facts</h3>
+                                <p class="muted" style="margin: 0">Serving Size @(_recipe.ServingSize ?? "1 serving")</p>
+                            </div>
+                        </div>
+                        <div class="nutrition-facts-label">
+                            <div class="facts-title">Nutrition Facts</div>
+                            <div class="facts-serving">Serving Size @(_recipe.ServingSize ?? "1 serving")</div>
+                            <div class="facts-calories">
+                                <span>Calories</span>
+                                <strong>@_editRecipe.Calories</strong>
+                            </div>
+                            @foreach (var row in NutritionFactRows)
+                            {
+                                <div class="facts-row">
+                                    <span>@row.Label</span>
+                                    <span>@row.Value</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Ingredients</h3>
+                            </div>
+                        </div>
+                        <ul class="plain-list">
+                            @foreach (var ingredient in _recipe.Ingredients)
+                            {
+                                <li>@ingredient</li>
+                            }
+                        </ul>
+                    </div>
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Preparation</h3>
+                            </div>
+                        </div>
+                        <ol class="plain-list">
+                            @foreach (var step in _recipe.Instructions)
+                            {
+                                <li>@step</li>
+                            }
+                        </ol>
+                    </div>
+
+                    <div class="section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Tags and nutrient claims</h3>
+                            </div>
+                        </div>
+                        <div class="tag-list">
+                            @foreach (var tag in _recipe.Tags.Concat(_recipe.NutrientClaims).Distinct())
+                            {
+                                <span class="tag-chip">@tag</span>
+                            }
+                        </div>
+                    </div>
+                </section>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [Parameter] public int RecipeId { get; set; }
+
+    private bool IsEditRoute => Navigation.Uri.EndsWith("/edit", StringComparison.OrdinalIgnoreCase);
+    private bool _loading = true;
+    private RecipeDto? _recipe;
+    private RecipeDto _editRecipe = new();
+    private string _tagsText = string.Empty;
+    private string _ingredientsText = string.Empty;
+    private string _claimsText = string.Empty;
+    private int _scaleServings = 50;
+    private string? _scaleMessage;
+    private string? _actionMessage;
+    private List<string> _scaledIngredients = [];
+
+    private string CategoryBreadcrumb =>
+        $"> Cuisines > Dietary Restrictions > Meal Components > Critical Nutrients";
+
+    private static string ApprovalLabel(RecipeDto recipe) => recipe.IsApproved ? "Approved" : "Pending review";
+
+    private IReadOnlyList<(string Label, string Value)> NutritionFactRows =>
+    [
+        ("Total Fat", $"{_editRecipe.FatG} g"),
+        ("Saturated Fat", $"{Math.Round(_editRecipe.FatG * 0.35m, 1)} g"),
+        ("Trans Fat", "0 g"),
+        ("Cholesterol", "0 mg"),
+        ("Sodium", $"{_editRecipe.SodiumMg} mg"),
+        ("Total Carbohydrate", $"{Math.Round((_editRecipe.Calories / 4m) * 0.45m, 0)} g"),
+        ("Dietary Fiber", $"{_editRecipe.FiberG} g"),
+        ("Total Sugars", "0 g"),
+        ("Protein", $"{_editRecipe.ProteinG} g"),
+        ("Vitamin C", $"{_editRecipe.VitaminCMg} mg"),
+        ("Calcium", $"{_editRecipe.CalciumMg} mg"),
+        ("Iron", $"{Math.Round(_editRecipe.ProteinG * 0.3m, 1)} mg"),
+        ("Potassium", $"{Math.Round(_editRecipe.Calories * 0.7m, 0)} mg")
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _recipe = await Api.GetRecipeAsync(RecipeId);
+        if (_recipe is not null)
+        {
+            _editRecipe = CloneRecipe(_recipe);
+            _tagsText = string.Join(", ", _editRecipe.Tags);
+            _ingredientsText = string.Join(", ", _editRecipe.Ingredients);
+            _claimsText = string.Join(", ", _editRecipe.NutrientClaims);
+            _scaleServings = _editRecipe.YieldServings;
+        }
+        _loading = false;
+    }
+
+    private async Task SaveRecipe()
+    {
+        if (_recipe is null)
+        {
+            return;
+        }
+
+        _editRecipe.Tags = _tagsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        _editRecipe.Ingredients = _ingredientsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        _editRecipe.NutrientClaims = _claimsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        _recipe = await Api.UpdateRecipeAsync(RecipeId, _editRecipe);
+        _editRecipe = CloneRecipe(_recipe);
+        _tagsText = string.Join(", ", _editRecipe.Tags);
+        _ingredientsText = string.Join(", ", _editRecipe.Ingredients);
+        _claimsText = string.Join(", ", _editRecipe.NutrientClaims);
+        Navigation.NavigateTo($"/recipes/{RecipeId}");
+    }
+
+    private void ScaleRecipe()
+    {
+        if (_recipe is null)
+        {
+            return;
+        }
+
+        var factor = _recipe.YieldServings == 0 ? 1 : (decimal)_scaleServings / _recipe.YieldServings;
+        _scaleMessage = $"Scaled from {_recipe.YieldServings} to {_scaleServings} servings.";
+        _scaledIngredients = _recipe.Ingredients
+            .Select(ingredient => $"{factor:0.##}x {ingredient}")
+            .ToList();
+    }
+
+    private async Task ToggleFavorite()
+    {
+        if (_recipe is null)
+        {
+            return;
+        }
+
+        _editRecipe.IsFavorite = !_editRecipe.IsFavorite;
+        _recipe = await Api.UpdateRecipeAsync(RecipeId, _editRecipe);
+        _editRecipe = CloneRecipe(_recipe);
+        _actionMessage = _editRecipe.IsFavorite ? "Recipe added to my favorite." : "Recipe removed from my favorite.";
+    }
+
+    private void PrintRecipe()
+    {
+        _actionMessage = "Print Recipe would open the printable recipe view in the production system.";
+    }
+
+    private void DeleteRecipe()
+    {
+        _actionMessage = "Delete selected. Recipe deletion requires the permissioned recipe maintenance flow before changes are saved.";
+    }
+
+    private static RecipeDto CloneRecipe(RecipeDto recipe) =>
+        new()
+        {
+            RecipeId = recipe.RecipeId,
+            RecipeName = recipe.RecipeName,
+            MealType = recipe.MealType,
+            Category = recipe.Category,
+            Calories = recipe.Calories,
+            SodiumMg = recipe.SodiumMg,
+            ProteinG = recipe.ProteinG,
+            FiberG = recipe.FiberG,
+            FatG = recipe.FatG,
+            Tags = [.. recipe.Tags],
+            IsApproved = recipe.IsApproved,
+            Ingredients = [.. recipe.Ingredients],
+            Instructions = [.. recipe.Instructions],
+            ServingSize = recipe.ServingSize,
+            YieldServings = recipe.YieldServings,
+            ScaleNote = recipe.ScaleNote,
+            ContributedBy = recipe.ContributedBy,
+            CreatedOn = recipe.CreatedOn,
+            IsPublic = recipe.IsPublic,
+            IsFavorite = recipe.IsFavorite,
+            IsDead = recipe.IsDead,
+            NutrientClaims = [.. recipe.NutrientClaims],
+            VitaminCMg = recipe.VitaminCMg,
+            CalciumMg = recipe.CalciumMg
+        };
+}

@@ -1,0 +1,1894 @@
+@page "/menus/{MenuId:int}"
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+@inject MenuDraftService Drafts
+@inject IJSRuntime Js
+@inject AppModeService AppMode
+@implements IAsyncDisposable
+
+<div class="grid" style="gap: 18px" @ref="_pageRoot">
+    @if (Menu is null)
+    {
+        <section class="section">
+            <div class="empty-state">Loading menu…</div>
+        </section>
+    }
+    else
+    {
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Saved menu</div>
+                    <h3 style="margin-bottom: 6px">@Menu.Menu.Name</h3>
+                    <p class="muted" style="margin: 0">
+                        @Menu.Menu.StartDate?.ToString("MMM d, yyyy") to @Menu.Menu.EndDate?.ToString("MMM d, yyyy")
+                        · Week @Menu.Menu.CycleWeek
+                    </p>
+                </div>
+                <div class="hero-actions menu-detail-actions">
+                    <StatusPill Status="@Menu.Analysis.OverallStatus" Label="@Menu.Analysis.OverallStatus" />
+                    @if (IsAdmin)
+                    {
+                        <button type="button" class="@(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Review</button>
+                        <button type="button" class="@(MenuDetailsTab == ReviewTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(ReviewTab)">Summary</button>
+                        <button type="button" class="@(MenuDetailsTab == InsightsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(InsightsTab)">System checks</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="secondary-button" @onclick="OpenAsDraft">Use as starting point</button>
+                        <button type="button" class="@(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Comments</button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        @if (MenuDetailsTab == ReviewTab && IsAdmin)
+        {
+            <section class="section">
+                <h3>Menu information</h3>
+                <div class="summary-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px">
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Menu.Name</div>
+                        <div class="muted small">Menu name</div>
+                        <div class="muted small">@Menu.Menu.Status · @Menu.Menu.MenuFormat</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@(Menu.Menu.ContractName ?? "—")</div>
+                        <div class="muted small">Contract</div>
+                        <div class="muted small">Program @GetMenuDescriptor()</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Menu.MealType</div>
+                        <div class="muted small">Meal type</div>
+                        <div class="muted small">Coverage @(Menu.Menu.MenuCoverage ?? "—") · @Menu.Menu.DaysPerWeek-day cycle</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Menu.Status</div>
+                        <div class="muted small">Current status</div>
+                        <div class="muted small">Status date @Menu.Menu.StatusDate?.ToString("MMM d, yyyy")</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@(Menu.Menu.SubmittedTo ?? "—")</div>
+                        <div class="muted small">Submitted to</div>
+                        <div class="muted small">Created by @(Menu.Menu.CreatedBy ?? "—")</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Menu.ServiceDate.ToString("MMM d")</div>
+                        <div class="muted small">Service date</div>
+                        <div class="muted small">@Menu.Menu.StartDate?.ToString("MMM d, yyyy") to @Menu.Menu.EndDate?.ToString("MMM d, yyyy")</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <div class="section-header">
+                    <div>
+                        <h3 style="margin-bottom: 6px">Review comments</h3>
+                        <p class="muted" style="margin: 0">Latest submission comments and status notes for this menu.</p>
+                    </div>
+                    <button type="button" class="secondary-button" @onclick="() => SetMenuDetailsTab(CommentsTab)">View history</button>
+                </div>
+                @if (!VisibleReviewComments.Any())
+                {
+                    <div class="empty-state" style="margin-top: 14px">No review comments have been added to this menu yet.</div>
+                }
+                else
+                {
+                    <div class="comment-preview-list">
+                        @foreach (var comment in VisibleReviewComments.Take(2))
+                        {
+                            <div class="status-row">
+                                <div>
+                                    <strong>@comment.Author</strong>
+                                    <div class="muted small">@comment.Body</div>
+                                </div>
+                                <span class="status-badge @comment.BadgeClass">@comment.Action</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="section">
+                <h3>Menu snapshot</h3>
+                <div class="summary-grid" style="grid-template-columns: repeat(4, minmax(0, 1fr))">
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Menu.Items.Count</div>
+                        <div class="muted small">Items placed</div>
+                        <div class="muted small">@GetMealMixSummary()</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@GetRepeatedRecipeCount()</div>
+                        <div class="muted small">Repeated recipes</div>
+                        <div class="muted small">@GetRecipeRepetitionSummary()</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@GetUniqueRecipeCount()</div>
+                        <div class="muted small">Unique recipes</div>
+                        <div class="muted small">@Menu.Menu.DaysPerWeek-day cycle · Week @Menu.Menu.CycleWeek</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">@Menu.Analysis.OverallStatus</div>
+                        <div class="muted small">Nutrition status</div>
+                        <div class="muted small">@GetNutritionSummary()</div>
+                    </div>
+                </div>
+            </section>
+        }
+        else if (MenuDetailsTab == CommentsTab)
+        {
+            var reviewComponents = ReviewBoardComponents.ToList();
+            var boardDays = ReviewBoardDays;
+
+            <section class="section review-comment-summary">
+                <div class="section-header">
+                    <div>
+                        <h3 style="margin-bottom: 6px">Review workspace</h3>
+                        <p class="muted" style="margin: 0">@ReviewWorkspaceLead</p>
+                    </div>
+                    <div class="hero-actions">
+                        <button type="button" class="ghost-button" @onclick="SelectGeneralMenuTarget">Overall menu comment</button>
+                        @if (IsAdmin)
+                        {
+                            <button type="button" class="button" @onclick="FinishReviewAndSend">Finish review and send</button>
+                        }
+                        <span class="status-badge brand">@OpenCommentCount open</span>
+                    </div>
+                </div>
+
+                @if (IsAdmin)
+                {
+                    <details class="setup-details review-perspective-details">
+                        <summary>Review perspective: @ReviewPerspectiveLabel</summary>
+                        <div class="review-perspective-shell">
+                            <div class="review-perspective-controls">
+                                <label>
+                                    <div class="small muted">Review perspective</div>
+                                    <InputSelect class="input compact-input" @bind-Value="ReviewPerspective">
+                                        @foreach (var option in ReviewPerspectiveOptions)
+                                        {
+                                            <option value="@option.Key">@option.Label</option>
+                                        }
+                                    </InputSelect>
+                                </label>
+                                <div>
+                                    <div class="small muted">Provider / contract</div>
+                                    <strong>@ReviewProviderName</strong>
+                                    <div class="muted small">@ReviewQueueMenus.Count() menu@(ReviewQueueMenus.Count() == 1 ? "" : "s") in this perspective</div>
+                                </div>
+                            </div>
+
+                            <div class="review-queue-strip">
+                                @foreach (var queueMenu in ReviewQueueMenus)
+                                {
+                                    <a class="review-queue-card @(queueMenu.Id == Menu.Menu.Id ? "active" : "")"
+                                       href="@($"/menus/{queueMenu.Id}?tab=comments&perspective={ReviewPerspective}")">
+                                        <span class="status-badge @(BadgeClassForStatus(queueMenu.Status))">@queueMenu.Status</span>
+                                        <strong>@queueMenu.Name</strong>
+                                        <span class="muted small">@queueMenu.MealType · Week @queueMenu.CycleWeek · @queueMenu.StartDate?.ToString("MMM d")</span>
+                                        <span class="muted small">@ReviewQueueIssueLabel(queueMenu)</span>
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </details>
+                }
+
+            </section>
+
+            <div class="columns review-comment-layout">
+                <section class="section review-board-section">
+                    <div class="section-header">
+                        <div>
+                        <h3 style="margin-bottom: 6px">@ReviewBoardTitle</h3>
+                        <p class="muted" style="margin: 0">Choose a review scope, then click a component cell or recipe before adding a comment.</p>
+                    </div>
+                        <span class="status-badge brand">@boardDays day cycle</span>
+                    </div>
+
+                    <div class="toggle-row review-scope-row">
+                        @foreach (var scope in ReviewMealScopes)
+                        {
+                            <button type="button" class="@(ReviewMealScope == scope.Key ? "button" : "ghost-button")" @onclick="() => SetReviewMealScope(scope.Key)">@scope.Label</button>
+                        }
+                    </div>
+
+                    <div class="review-board-scroll">
+                        <div class="review-board-grid" style="grid-template-columns: 150px repeat(@boardDays, minmax(170px, 1fr))">
+                            <div class="calendar-corner"></div>
+                            @for (var dayIndex = 0; dayIndex < boardDays; dayIndex++)
+                            {
+                                var day = ReviewBoardStart.AddDays(dayIndex);
+                                <div class="calendar-day-header">
+                                    <div class="day-header-top">
+                                        <div>
+                                            <div class="day-name">@day.ToString("ddd").ToUpperInvariant()</div>
+                                            <strong>@day.ToString("MMM d")</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @foreach (var component in reviewComponents)
+                            {
+                                <div class="meal-label review-component-label">
+                                    <div>
+                                        <div class="meal-label-title">@component.Label</div>
+                                        <div class="meal-label-subtitle">@component.Requirement</div>
+                                    </div>
+                                </div>
+                                @for (var dayIndex = 0; dayIndex < boardDays; dayIndex++)
+                                {
+                                    var cellDayIndex = dayIndex;
+                                    var currentComponent = component;
+                                    var target = ComponentTarget(cellDayIndex, currentComponent);
+                                    var commentsForTarget = CommentCountForTarget(target);
+                                    var cellItems = ItemsForReviewCell(cellDayIndex, currentComponent.Key).ToList();
+
+                                    <div class="calendar-cell review-comment-cell @(IsSelectedTarget(target) ? "active" : "") @(commentsForTarget > 0 ? "has-comments" : "")"
+                                         role="button"
+                                         tabindex="0"
+                                         @onclick="() => SelectCommentTarget(cellDayIndex, currentComponent)">
+                                        @if (commentsForTarget > 0)
+                                        {
+                                            <span class="comment-marker">@commentsForTarget</span>
+                                        }
+                                        @if (cellItems.Any())
+                                        {
+                                            @foreach (var item in cellItems)
+                                            {
+                                                <button type="button"
+                                                        class="scheduled-card review-scheduled-card @(IsSelectedTarget(RecipeTarget(item)) ? "active" : "")"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="() => SelectRecipeCommentTarget(item)">
+                                                    <span class="meal-badge">@currentComponent.Label.Substring(0, 1)</span>
+                                                    <strong>@item.Recipe.RecipeName</strong>
+                                                    <span>@item.Recipe.Category · @item.Recipe.Calories kcal</span>
+                                                </button>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="muted small">No item listed</span>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section review-comment-side-panel">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Write comment</h3>
+                            <p class="muted" style="margin: 0">@CommentPanelDescription</p>
+                        </div>
+                    </div>
+
+                    <div class="comment-target-banner">
+                        <div>
+                            <div class="small muted">@(IsGeneralTargetSelected ? "Overall menu comment" : "Selected item comment")</div>
+                            <strong>@SelectedCommentTarget.Label</strong>
+                            <div class="muted small">@SelectedCommentHelpText</div>
+                        </div>
+                        @if (!IsGeneralTargetSelected)
+                        {
+                            <button type="button" class="ghost-button tiny-button" @onclick="SelectGeneralMenuTarget">Switch to overall menu</button>
+                        }
+                    </div>
+
+                    @if (!CommentsForSelectedTarget.Any())
+                    {
+                        <div class="empty-state" style="margin-top: 14px">No comments are linked to this target yet.</div>
+                    }
+                    else
+                    {
+                        <div class="comment-thread">
+                            @foreach (var comment in CommentsForSelectedTarget)
+                            {
+                                <div class="comment-card">
+                                    <div class="comment-card-head">
+                                        <div>
+                                            <strong>@comment.Author</strong>
+                                            <div class="muted small">@comment.Role · @comment.CreatedAt.ToString("MMM d, yyyy h:mm tt")</div>
+                                        </div>
+                                        <span class="status-badge @comment.BadgeClass">@comment.Action</span>
+                                    </div>
+                                    <p>@comment.Body</p>
+                                    <div class="comment-card-meta">
+                                        <span>@comment.Visibility</span>
+                                        <span>@CommentTargetLabel(comment)</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="comment-entry">
+                        <label>
+                            <div class="small muted">@CommentInputLabel</div>
+                            <InputTextArea class="input comment-textarea" @bind-Value="NewCommentBody" />
+                        </label>
+                        <div class="hero-actions">
+                            <button type="button" class="button" @onclick="AddReviewComment">Add comment</button>
+                            <button type="button" class="ghost-button" @onclick="ClearCommentDraft">Clear</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(CommentMessage))
+                        {
+                            <span class="status-badge good">@CommentMessage</span>
+                        }
+                    </div>
+                </section>
+            </div>
+
+            @if (IsAdmin)
+            {
+                <section class="section review-admin-tools">
+                    <div class="section-header">
+                        <div>
+                            <h3 style="margin-bottom: 6px">Review support</h3>
+                            <p class="muted" style="margin: 0">Use these after scanning the board: summarize provider-facing comments and turn rule-based flags into comments.</p>
+                        </div>
+                    </div>
+
+                    <div class="comment-summary-metrics">
+                        <button type="button" class="comment-metric-card @(IsGeneralTargetSelected ? "active" : "")" @onclick="SelectGeneralMenuTarget">
+                            <strong>@GeneralCommentCount</strong>
+                            <span>Overall menu comments</span>
+                        </button>
+                        <div class="comment-metric-card">
+                            <strong>@CorrectionCommentCount</strong>
+                            <span>Corrections</span>
+                        </div>
+                        <div class="comment-metric-card">
+                            <strong>@AnchoredCommentCount</strong>
+                            <span>Linked to cells or recipes</span>
+                        </div>
+                        <div class="comment-metric-card">
+                            <strong>@SentReviewCount</strong>
+                            <span>Review sent events</span>
+                        </div>
+                    </div>
+
+                    <div class="review-admin-tool-grid">
+                        <div class="comment-summary-tool">
+                            <div class="section-header compact-header">
+                                <div>
+                                    <h4>Comment summary for email</h4>
+                                    <p class="muted small">Generate a provider-facing summary grouped by menu item, component, or overall menu target.</p>
+                                </div>
+                                <div class="hero-actions">
+                                    <button type="button" class="ghost-button" @onclick="ToggleMenuCommentSummary">
+                                        @(ShowMenuCommentSummary ? "Hide summary" : "Generate summary")
+                                    </button>
+                                    @if (ShowMenuCommentSummary)
+                                    {
+                                        <button type="button" class="secondary-button" @onclick="CopyMenuCommentSummary">Copy summary</button>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (ShowMenuCommentSummary)
+                            {
+                                <div class="comment-summary-generated">
+                                    <div class="comment-summary-stats">
+                                        <span>@ProviderFacingMenuSummaryComments.Count() provider-facing comment@(ProviderFacingMenuSummaryComments.Count() == 1 ? "" : "s")</span>
+                                        <span>@ProviderFacingMenuSummaryComments.Count(comment => TargetKey(comment) != TargetKey(GeneralMenuTarget)) linked item@(ProviderFacingMenuSummaryComments.Count(comment => TargetKey(comment) != TargetKey(GeneralMenuTarget)) == 1 ? "" : "s")</span>
+                                        <span>@ProviderFacingMenuSummaryComments.Select(CommentTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count() target@(ProviderFacingMenuSummaryComments.Select(CommentTargetLabel).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1 ? "" : "s")</span>
+                                    </div>
+                                    <textarea class="input comment-summary-textarea" readonly>@MenuCommentSummaryText</textarea>
+                                    @if (!string.IsNullOrWhiteSpace(MenuCommentSummaryMessage))
+                                    {
+                                        <span class="status-badge good">@MenuCommentSummaryMessage</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="review-attention-panel">
+                            <div class="section-header compact-header">
+                                <div>
+                                    <h4>System checks needing attention</h4>
+                                    <p class="muted small">Flags from nutrition results, missing meal components, and repeated recipes.</p>
+                                </div>
+                                <span class="status-badge brand">@ReviewAttentionItems.Count() item@(ReviewAttentionItems.Count() == 1 ? "" : "s")</span>
+                            </div>
+                            @if (!ReviewAttentionItems.Any())
+                            {
+                                <div class="empty-state compact-empty">No rule-based attention items were found for this menu.</div>
+                            }
+                            else
+                            {
+                                <div class="review-attention-list">
+                                    @foreach (var item in ReviewAttentionItems.Take(6))
+                                    {
+                                        <div class="review-attention-row">
+                                            <span class="status-badge @item.BadgeClass">@item.Severity</span>
+                                            <div>
+                                                <strong>@item.Title</strong>
+                                                <div class="muted small">@item.Detail</div>
+                                            </div>
+                                            @if (item.Target is not null)
+                                            {
+                                                <button type="button" class="ghost-button tiny-button" @onclick="() => UseAttentionItemAsComment(item)">Add as comment</button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (MealComparisonRows.Count() > 1)
+                        {
+                            <div class="meal-comparison-panel">
+                                <div class="section-header compact-header">
+                                    <div>
+                                        <h4>Meal scope summary</h4>
+                                        <p class="muted small">Shows item count, calories, sodium, and component coverage by breakfast, lunch, and dinner when a menu includes multiple meal views.</p>
+                                    </div>
+                                </div>
+                                <div class="meal-comparison-grid">
+                                    @foreach (var row in MealComparisonRows)
+                                    {
+                                        <div class="meal-comparison-card">
+                                            <strong>@row.MealName</strong>
+                                            <span>@row.ItemCount item@(row.ItemCount == 1 ? "" : "s")</span>
+                                            <span>@row.Calories kcal · @row.SodiumMg mg sodium</span>
+                                            <span>@row.ComponentCount component@(row.ComponentCount == 1 ? "" : "s")</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (VisibleReviewComments.Any())
+                        {
+                            <div class="comment-shortcut-list">
+                                @foreach (var comment in AnchoredCommentShortcuts.Take(8))
+                                {
+                                    <button type="button" class="comment-shortcut-row @(IsCommentTargetSelected(comment) ? "active" : "")" @onclick="() => FocusComment(comment)">
+                                        <span class="status-badge @comment.BadgeClass">@comment.Action</span>
+                                        <span class="comment-shortcut-main">
+                                            <strong>@CommentTargetLabel(comment)</strong>
+                                            <span>@CommentSnippet(comment.Body)</span>
+                                        </span>
+                                        <span class="muted small">@comment.CreatedAt.ToString("MMM d")</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <section class="section">
+                <div class="section-header">
+                    <div>
+                        <h3 style="margin-bottom: 6px">Submission and revision history</h3>
+                        <p class="muted" style="margin: 0">High-level workflow only: submitted, review sent, provider response or resubmission, and approval.</p>
+                    </div>
+                    <span class="status-badge brand">@WorkflowEvents.Count() step@(WorkflowEvents.Count() == 1 ? "" : "s")</span>
+                </div>
+                <div class="admin-table-wrap" style="margin-top: 14px">
+                    <table class="admin-table review-history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Step</th>
+                                <th>By</th>
+                                <th>Notes</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var comment in WorkflowEvents)
+                            {
+                                <tr>
+                                    <td>@comment.CreatedAt.ToString("MMM d, yyyy")</td>
+                                    <td><span class="status-badge @comment.BadgeClass">@WorkflowActionLabel(comment)</span></td>
+                                    <td>
+                                        <strong>@comment.Author</strong>
+                                        <div class="muted small">@comment.Role</div>
+                                    </td>
+                                    <td>@comment.Body</td>
+                                    <td>@comment.Visibility</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+        else
+        {
+            <div class="section">
+                @if (Menu is not null)
+                {
+                    <NutritionPanel Totals="@Menu.Analysis.Totals" Statuses="@Menu.Analysis.Statuses" MealRequirements="@Menu.Analysis.MealRequirements" OverallStatus="@Menu.Analysis.OverallStatus" />
+                }
+
+                <h3 style="margin-top: 0">Rule-based review checks</h3>
+                <p class="muted" style="margin-top: -8px">Nutrition, revision, and historical comparison checks based on existing recipes and saved menu data.</p>
+
+                <div class="section-inner">
+                    <h4>Revision suggestions</h4>
+                    @foreach (var group in Menu?.Revisions ?? new Dictionary<string, List<RecommendationItemDto>>())
+                    {
+                        <div style="margin-bottom: 12px">
+                            <div class="status-badge brand" style="margin-bottom: 8px">@group.Key</div>
+                            @foreach (var item in group.Value)
+                            {
+                                <div class="status-row">
+                                    <div>
+                                        <strong>@item.Recipe.RecipeName</strong>
+                                        <div class="muted small">
+                                            <span class="meal-badge @MealBadgeClassFromMealType(item.Recipe.MealType)">@MealShortNameFromMealType(item.Recipe.MealType)</span>
+                                            <span style="margin-left: 6px">@item.Recipe.MealType · @item.Recipe.Category</span>
+                                        </div>
+                                        <div class="muted small">@string.Join(" · ", item.Reasons)</div>
+                                    </div>
+                                    <strong>@item.Score</strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="section-inner">
+                    <h4>Similar historical menus</h4>
+                    @foreach (var item in Menu?.SimilarMenus ?? Enumerable.Empty<SimilarMenuDto>())
+                    {
+                        <div class="status-row">
+                            <div>
+                                <strong>@item.Name</strong>
+                                <div class="muted small">@item.ServiceDate.ToString("MMM d, yyyy")</div>
+                            </div>
+                            <span class="status-badge @(item.PassesNutrition ? "good" : "warn")">@item.Similarity</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="section-inner">
+                    <h4>Menu status history</h4>
+                    <div class="status-stack">
+                        <div class="status-row">
+                            <div>
+                                <strong>@(Menu?.Menu.Status ?? "Loading")</strong>
+                                <div class="muted small">Current status</div>
+                            </div>
+                            <span class="status-badge brand">@Menu?.Menu.StatusDate?.ToString("MMM d, yyyy")</span>
+                        </div>
+                        <div class="status-row">
+                            <div>
+                                <strong>Created</strong>
+                                <div class="muted small">@Menu?.Menu.CreatedAt.ToString("MMM d, yyyy h:mm tt")</div>
+                            </div>
+                            <span class="status-badge brand">Logged</span>
+                        </div>
+                        <div class="status-row">
+                            <div>
+                                <strong>Submitted to</strong>
+                                <div class="muted small">@(Menu?.Menu.SubmittedTo ?? "Not submitted")</div>
+                            </div>
+                            <span class="status-badge brand">Submission</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int MenuId { get; set; }
+
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private MenuDetailDto? Menu { get; set; }
+    private ElementReference _pageRoot;
+    private IJSObjectReference? _dragDropModule;
+    private DotNetObjectReference<MenuDetails>? _dotNetRef;
+    private const string ReviewTab = "review";
+    private const string CommentsTab = "comments";
+    private const string InsightsTab = "insights";
+    private const string ThisMenuPerspective = "this-menu";
+    private const string SameProviderPerspective = "same-provider";
+    private const string SameProviderCyclePerspective = "same-provider-cycle";
+    private const string SameProviderMealPerspective = "same-provider-meal";
+    private const string SameProviderNeedsReviewPerspective = "same-provider-needs-review";
+    private const string ReviewCommentAction = "Review comment";
+    private const string ProviderResponseAction = "Provider response";
+    private const string ReviewSentAction = "Comments sent to provider";
+    private static readonly CommentTarget GeneralMenuTarget = new("menu", "General menu summary");
+    private string MenuDetailsTab { get; set; } = CommentsTab;
+    private string ReviewPerspective { get; set; } = SameProviderPerspective;
+    private string DraftName { get; set; } = string.Empty;
+    private DateTime DraftStartDate { get; set; } = StartOfServiceWeek(DateTime.Today);
+    private int DraftDaysPerWeek { get; set; } = 5;
+    private int DraftCycleWeek { get; set; } = 1;
+    private List<MenuItemDetailDto> DraftItems { get; set; } = new();
+    private List<MenuSummaryDto> AllMenus { get; set; } = [];
+    private List<MenuReviewCommentDto> ReviewComments { get; set; } = [];
+    private CommentTarget SelectedCommentTarget { get; set; } = GeneralMenuTarget;
+    private string ReviewMealScope { get; set; } = AllMealsScope;
+    private string NewCommentBody { get; set; } = string.Empty;
+    private string? CommentMessage { get; set; }
+    private bool ShowMenuCommentSummary { get; set; }
+    private string? MenuCommentSummaryMessage { get; set; }
+    private int? DragDraftIndex { get; set; }
+    private int? HoverDraftIndex { get; set; }
+    private int? DropDraftPulseIndex { get; set; }
+    private bool IsProvider => CurrentRole == AppRole.Provider;
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+    private IEnumerable<MenuReviewCommentDto> RoleVisibleReviewComments => ReviewComments
+        .Where(comment => IsAdmin || !comment.Visibility.Equals("Internal", StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<MenuReviewCommentDto> VisibleReviewComments => RoleVisibleReviewComments
+        .Where(IsCommentVisibleInReviewThread);
+    private string CommentPanelDescription => IsProvider
+        ? "Review NYC Aging comments and add a response for the reviewer."
+        : "Add comments that providers can use to revise the menu.";
+    private string CommentInputLabel => IsProvider
+        ? "Response to NYC Aging"
+        : "Comment to provider";
+    private string MenuWorkspaceDescription => IsAdmin
+        ? "Review same-provider submissions, add provider-facing comments, and check rule-based items that may need attention."
+        : "View NYC Aging comments, respond to requested changes, and check menu status history.";
+    private string ReviewWorkspaceLead => IsAdmin
+        ? "Use the perspective selector to move through related provider menus, then select a cell or recipe to write a linked comment."
+        : "Review NYC Aging comments, select a linked item if needed, and respond for the reviewer.";
+    private DateTime ReviewBoardStart => Menu?.Menu.StartDate ?? Menu?.Menu.ServiceDate ?? StartOfServiceWeek(DateTime.Today);
+    private int ReviewBoardDays => Math.Clamp(Menu?.Menu.DaysPerWeek ?? 5, 1, 7);
+    private const string AllMealsScope = "all";
+    private string SelectedTargetKey => TargetKey(SelectedCommentTarget);
+    private bool IsGeneralTargetSelected => SelectedTargetKey == TargetKey(GeneralMenuTarget);
+    private string SelectedCommentHelpText => IsGeneralTargetSelected
+        ? "Use this for summary comments about the whole submitted menu."
+        : "This comment will stay linked to the selected day, component, or recipe.";
+    private IEnumerable<MenuReviewCommentDto> CommentsForSelectedTarget => VisibleReviewComments
+        .Where(comment => TargetKey(comment) == SelectedTargetKey);
+    private IEnumerable<MenuReviewCommentDto> ProviderFacingMenuSummaryComments => VisibleReviewComments
+        .Where(comment => !comment.Action.Equals(ProviderResponseAction, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(comment => TargetKey(comment) == TargetKey(GeneralMenuTarget) ? 0 : 1)
+        .ThenBy(CommentTargetLabel)
+        .ThenBy(comment => comment.CreatedAt);
+    private string MenuCommentSummaryText => BuildMenuCommentSummaryText();
+    private IEnumerable<MenuReviewCommentDto> AnchoredCommentShortcuts => VisibleReviewComments
+        .OrderBy(comment => comment.ReviewStatus.Equals("resolved", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+        .ThenByDescending(comment => comment.CreatedAt);
+    private IEnumerable<MenuReviewCommentDto> WorkflowEvents => RoleVisibleReviewComments
+        .Where(IsWorkflowEvent)
+        .GroupBy(WorkflowStageKey)
+        .Select(group => group.OrderByDescending(comment => comment.CreatedAt).First())
+        .OrderBy(comment => comment.CreatedAt);
+    private int OpenCommentCount => VisibleReviewComments.Count(comment => !comment.ReviewStatus.Equals("resolved", StringComparison.OrdinalIgnoreCase));
+    private int GeneralCommentCount => VisibleReviewComments.Count(comment => TargetKey(comment) == TargetKey(GeneralMenuTarget));
+    private int CorrectionCommentCount => VisibleReviewComments.Count(comment => comment.Action.Contains("Correction", StringComparison.OrdinalIgnoreCase));
+    private int AnchoredCommentCount => VisibleReviewComments.Count(comment => TargetKey(comment) != TargetKey(GeneralMenuTarget));
+    private int SentReviewCount => RoleVisibleReviewComments.Count(comment => comment.Action.Equals(ReviewSentAction, StringComparison.OrdinalIgnoreCase));
+    private string ReviewBoardTitle => ReviewMealScope == AllMealsScope ? "All meals review board" : $"{ReviewScopeLabel(ReviewMealScope)} review board";
+    private IEnumerable<ReviewScopeOption> ReviewMealScopes
+    {
+        get
+        {
+            var scopes = new List<ReviewScopeOption> { new(AllMealsScope, "All meals") };
+            var mealKeys = Menu?.Menu.Items
+                .Select(item => MealKeyFromSlot(item.MealSlot, Menu.Menu.MealType))
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(MealSortOrder)
+                .ToList() ?? [];
+
+            foreach (var key in mealKeys)
+            {
+                scopes.Add(new ReviewScopeOption(key, ReviewScopeLabel(key)));
+            }
+
+            return scopes;
+        }
+    }
+    private IEnumerable<MenuItemDetailDto> ScopedReviewItems => Menu?.Menu.Items
+        .Where(item => ReviewMealScope == AllMealsScope || MealKeyFromSlot(item.MealSlot, Menu.Menu.MealType).Equals(ReviewMealScope, StringComparison.OrdinalIgnoreCase))
+        ?? [];
+    private IEnumerable<MealComparisonRow> MealComparisonRows => (Menu?.Menu.Items ?? [])
+        .GroupBy(item => MealKeyFromSlot(item.MealSlot, Menu?.Menu.MealType))
+        .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+        .OrderBy(group => MealSortOrder(group.Key))
+        .Select(group => new MealComparisonRow(
+            ReviewScopeLabel(group.Key),
+            group.Count(),
+            group.Sum(item => item.Recipe.Calories),
+            group.Sum(item => item.Recipe.SodiumMg),
+            group.Select(item => NormalizeCommentComponentKey(item.ComponentKey ?? ExtractComponentFromMealSlot(item.MealSlot) ?? item.Recipe.Category)).Distinct(StringComparer.OrdinalIgnoreCase).Count()));
+    private IEnumerable<ReviewAttentionItem> ReviewAttentionItems => BuildReviewAttentionItems();
+    private IEnumerable<ReviewPerspectiveOption> ReviewPerspectiveOptions =>
+    [
+        new(ThisMenuPerspective, "This menu only"),
+        new(SameProviderPerspective, "Same provider"),
+        new(SameProviderCyclePerspective, "Same provider + cycle week"),
+        new(SameProviderMealPerspective, "Same provider + meal type"),
+        new(SameProviderNeedsReviewPerspective, "Same provider + needs review")
+    ];
+    private string ReviewPerspectiveLabel => ReviewPerspectiveOptions.FirstOrDefault(option => option.Key == ReviewPerspective)?.Label ?? "Same provider";
+    private string ReviewProviderName => Menu?.Menu.ContractName
+        ?? Menu?.Menu.Contracts.FirstOrDefault()
+        ?? "Current provider";
+    private IEnumerable<MenuSummaryDto> ReviewQueueMenus => AllMenus
+        .Where(menu => IsAdmin && MatchesReviewProvider(menu))
+        .Where(menu => ReviewPerspective switch
+        {
+            ThisMenuPerspective => menu.Id == MenuId,
+            SameProviderCyclePerspective => menu.CycleWeek == Menu?.Menu.CycleWeek,
+            SameProviderMealPerspective => (menu.MealType ?? string.Empty).Equals(Menu?.Menu.MealType ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            SameProviderNeedsReviewPerspective => HasReviewWork(menu),
+            _ => true
+        })
+        .OrderBy(menu => menu.Id == MenuId ? 0 : 1)
+        .ThenBy(menu => menu.CycleWeek)
+        .ThenBy(menu => menu.StartDate ?? menu.ServiceDate)
+        .ThenBy(menu => menu.MealType);
+    private IEnumerable<LegacyMealComponent> ReviewBoardComponents
+    {
+        get
+        {
+            if (Menu is null)
+            {
+                return [];
+            }
+
+            var componentKeys = ScopedReviewItems
+                .Select(item => NormalizeCommentComponentKey(item.ComponentKey ?? ExtractComponentFromMealSlot(item.MealSlot) ?? item.Recipe.Category))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return LegacyReferenceData.MealComponents
+                .Where(component => componentKeys.Contains(component.Key))
+                .DefaultIfEmpty(LegacyReferenceData.MealComponents.First(component => component.Key == "entree"));
+        }
+    }
+
+    private IEnumerable<string> CurrentProviderNames =>
+        (Menu?.Menu.Contracts ?? [])
+            .Concat(string.IsNullOrWhiteSpace(Menu?.Menu.ContractName) ? Array.Empty<string>() : new[] { Menu!.Menu.ContractName! })
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    private bool MatchesReviewProvider(MenuSummaryDto menu)
+    {
+        var providerNames = CurrentProviderNames.ToList();
+        if (providerNames.Count == 0)
+        {
+            return menu.Id == MenuId;
+        }
+
+        return providerNames.Any(provider =>
+            (menu.ContractName ?? string.Empty).Equals(provider, StringComparison.OrdinalIgnoreCase)
+            || menu.Contracts.Any(contract => contract.Equals(provider, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool HasReviewWork(MenuSummaryDto menu) =>
+        menu.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Reviewed", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+        || menu.Status.Contains("Resubmitted", StringComparison.OrdinalIgnoreCase)
+        || !string.IsNullOrWhiteSpace(menu.ReturnedComments)
+        || !string.IsNullOrWhiteSpace(menu.ApprovalNotes);
+
+    private static bool HasReviewComments(MenuSummaryDto menu) =>
+        !string.IsNullOrWhiteSpace(menu.ReturnedComments)
+        || !string.IsNullOrWhiteSpace(menu.ApprovalNotes);
+
+    private static string ReviewQueueIssueLabel(MenuSummaryDto menu)
+    {
+        var flags = new List<string>();
+        if (HasReviewWork(menu))
+        {
+            flags.Add("Review work");
+        }
+
+        if (HasReviewComments(menu))
+        {
+            flags.Add("Comments");
+        }
+
+        if (menu.Status.Contains("Returned", StringComparison.OrdinalIgnoreCase))
+        {
+            flags.Add("Returned");
+        }
+
+        return flags.Count == 0 ? "No active review flags" : string.Join(" · ", flags.Distinct());
+    }
+
+    private static DateTime StartOfServiceWeek(DateTime date)
+    {
+        var daysSinceMonday = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.Date.AddDays(-daysSinceMonday);
+    }
+
+    private void GoToMenuBuilder() => Navigation.NavigateTo("/menus/new");
+
+    private bool CanUseMenuDetailsTab(string tab) =>
+        IsAdmin || tab.Equals(CommentsTab, StringComparison.OrdinalIgnoreCase);
+
+    private void SetMenuDetailsTab(string tab)
+    {
+        MenuDetailsTab = CanUseMenuDetailsTab(tab) ? tab : CommentsTab;
+    }
+
+    private async Task AddReviewComment()
+    {
+        if (Menu is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(NewCommentBody))
+        {
+            CommentMessage = "Enter a comment before adding it.";
+            return;
+        }
+
+        var action = IsProvider ? ProviderResponseAction : ReviewCommentAction;
+        var created = await Api.CreateMenuCommentAsync(Menu.Menu.Id, new MenuReviewCommentCreateRequest
+        {
+            Action = action,
+            Author = IsProvider ? AppMode.ProviderContract : "NYC Aging Nutrition Unit",
+            Role = IsProvider ? "Provider / Caterer" : "Admin / Department staff",
+            Body = NewCommentBody.Trim(),
+            Visibility = "Admin and provider",
+            BadgeClass = BadgeClassForAction(action),
+            IsUserComment = true,
+            TargetType = SelectedCommentTarget.TargetType,
+            TargetLabel = SelectedCommentTarget.Label,
+            DayIndex = SelectedCommentTarget.DayIndex,
+            MealSlot = SelectedCommentTarget.MealSlot,
+            ComponentKey = SelectedCommentTarget.ComponentKey,
+            RecipeId = SelectedCommentTarget.RecipeId,
+            NutrientKey = SelectedCommentTarget.NutrientKey,
+            ReviewStatus = "open"
+        });
+
+        ReviewComments.Insert(0, created);
+
+        NewCommentBody = string.Empty;
+        CommentMessage = $"Comment added to {SelectedCommentTarget.Label}.";
+    }
+
+    private async Task FinishReviewAndSend()
+    {
+        if (Menu is null || !IsAdmin)
+        {
+            return;
+        }
+
+        var providerCommentCount = VisibleReviewComments.Count(comment => comment.Action.Equals(ReviewCommentAction, StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Correction", StringComparison.OrdinalIgnoreCase));
+        var body = providerCommentCount == 0
+            ? "NYC Aging finished reviewing this menu and sent the review status to the provider."
+            : $"NYC Aging finished reviewing this menu and sent {providerCommentCount} comment{(providerCommentCount == 1 ? "" : "s")} to the provider for revision.";
+
+        var created = await Api.CreateMenuCommentAsync(Menu.Menu.Id, new MenuReviewCommentCreateRequest
+        {
+            Action = ReviewSentAction,
+            Author = "NYC Aging Nutrition Unit",
+            Role = "Admin / Department staff",
+            Body = body,
+            Visibility = "Admin and provider",
+            BadgeClass = "warn",
+            IsUserComment = true,
+            TargetType = GeneralMenuTarget.TargetType,
+            TargetLabel = GeneralMenuTarget.Label,
+            ReviewStatus = "open"
+        });
+
+        ReviewComments.Insert(0, created);
+        SelectGeneralMenuTarget();
+        CommentMessage = "Review sent to provider. It will appear as a provider follow-up item.";
+    }
+
+    private void ClearCommentDraft()
+    {
+        NewCommentBody = string.Empty;
+        CommentMessage = null;
+    }
+
+    private void ToggleMenuCommentSummary()
+    {
+        ShowMenuCommentSummary = !ShowMenuCommentSummary;
+        MenuCommentSummaryMessage = null;
+    }
+
+    private async Task CopyMenuCommentSummary()
+    {
+        try
+        {
+            var copied = await Js.InvokeAsync<bool>("simpleServings.copyText", MenuCommentSummaryText);
+            MenuCommentSummaryMessage = copied
+                ? "Summary copied."
+                : "Copy failed. Select the summary text and copy it manually.";
+        }
+        catch (JSException)
+        {
+            MenuCommentSummaryMessage = "Copy failed. Select the summary text and copy it manually.";
+        }
+    }
+
+    private string BuildMenuCommentSummaryText()
+    {
+        if (Menu is null)
+        {
+            return string.Empty;
+        }
+
+        var comments = ProviderFacingMenuSummaryComments.ToList();
+        var lines = new List<string>
+        {
+            $"Menu review comments: {Menu.Menu.Name}",
+            $"Provider/contract: {ReviewProviderName}",
+            $"Service dates: {FormatDateRange(Menu.Menu.StartDate, Menu.Menu.EndDate)}",
+            $"Cycle week: Week {Menu.Menu.CycleWeek}",
+            $"Status: {Menu.Menu.Status}",
+            string.Empty
+        };
+
+        if (comments.Count == 0)
+        {
+            lines.Add("No provider-facing review comments have been added yet.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        var linkedCount = comments.Count(comment => TargetKey(comment) != TargetKey(GeneralMenuTarget));
+        lines.Add($"Summary: {comments.Count} provider-facing comment{Plural(comments.Count)}, {linkedCount} linked to specific menu item{Plural(linkedCount)} or component{Plural(linkedCount)}.");
+        lines.Add(string.Empty);
+        lines.Add("Comments by item:");
+
+        foreach (var group in comments.GroupBy(CommentTargetLabel).OrderBy(group => group.Key))
+        {
+            lines.Add($"- {group.Key}");
+            foreach (var comment in group.OrderBy(comment => comment.CreatedAt))
+            {
+                lines.Add($"  - {CleanSummaryLine(comment.Body)}");
+            }
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("Requested next step: Please review the comments above, update the menu as needed, and resubmit through Simple Servings.");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private void SelectGeneralMenuTarget()
+    {
+        SelectedCommentTarget = GeneralMenuTarget;
+        CommentMessage = null;
+    }
+
+    private void SetReviewMealScope(string scope)
+    {
+        ReviewMealScope = scope;
+        SelectGeneralMenuTarget();
+    }
+
+    private void UseAttentionItemAsComment(ReviewAttentionItem item)
+    {
+        if (item.Target is not null)
+        {
+            SelectedCommentTarget = item.Target;
+        }
+
+        NewCommentBody = $"Please review: {item.Title}. {item.Detail}";
+        CommentMessage = null;
+        MenuDetailsTab = CommentsTab;
+    }
+
+    private void SelectCommentTarget(int dayIndex, LegacyMealComponent component)
+    {
+        SelectedCommentTarget = ComponentTarget(dayIndex, component);
+        CommentMessage = null;
+    }
+
+    private void SelectRecipeCommentTarget(MenuItemDetailDto item)
+    {
+        SelectedCommentTarget = RecipeTarget(item);
+        CommentMessage = null;
+    }
+
+    private void FocusComment(MenuReviewCommentDto comment)
+    {
+        SelectedCommentTarget = new CommentTarget(
+            string.IsNullOrWhiteSpace(comment.TargetType) ? "menu" : comment.TargetType,
+            CommentTargetLabel(comment),
+            comment.DayIndex,
+            comment.MealSlot,
+            comment.ComponentKey,
+            comment.RecipeId,
+            comment.NutrientKey);
+        MenuDetailsTab = CommentsTab;
+    }
+
+    private CommentTarget ComponentTarget(int dayIndex, LegacyMealComponent component)
+    {
+        var day = ReviewBoardStart.AddDays(dayIndex);
+        var mealName = ReviewMealScope == AllMealsScope ? "All meals" : ReviewScopeLabel(ReviewMealScope);
+        return new CommentTarget("component", $"{day:ddd MMM d} {mealName} - {component.Label}", dayIndex, mealName, component.Key);
+    }
+
+    private CommentTarget RecipeTarget(MenuItemDetailDto item)
+    {
+        var day = ReviewBoardStart.AddDays(Math.Clamp(item.DayIndex, 0, ReviewBoardDays - 1));
+        var mealName = MealNameFromSlot(item.MealSlot, Menu?.Menu.MealType);
+        var componentKey = NormalizeCommentComponentKey(item.ComponentKey ?? ExtractComponentFromMealSlot(item.MealSlot) ?? item.Recipe.Category);
+        return new CommentTarget("recipe", $"{day:ddd MMM d} {mealName} - {item.Recipe.RecipeName}", item.DayIndex, mealName, componentKey, item.RecipeId);
+    }
+
+    private IEnumerable<MenuItemDetailDto> ItemsForReviewCell(int dayIndex, string componentKey)
+    {
+        if (Menu is null)
+        {
+            return [];
+        }
+
+        return ScopedReviewItems
+            .Where(item => item.DayIndex == dayIndex)
+            .Where(item => NormalizeCommentComponentKey(item.ComponentKey ?? ExtractComponentFromMealSlot(item.MealSlot) ?? item.Recipe.Category) == componentKey)
+            .OrderBy(item => item.Position);
+    }
+
+    private int CommentCountForTarget(CommentTarget target) => RoleVisibleReviewComments.Count(comment => TargetKey(comment) == TargetKey(target));
+
+    private bool IsSelectedTarget(CommentTarget target) => TargetKey(target) == SelectedTargetKey;
+
+    private bool IsCommentTargetSelected(MenuReviewCommentDto comment) => TargetKey(comment) == SelectedTargetKey;
+
+    private string CommentTargetLabel(MenuReviewCommentDto comment)
+    {
+        if (!string.IsNullOrWhiteSpace(comment.TargetLabel))
+        {
+            return comment.TargetLabel!;
+        }
+
+        if (comment.TargetType.Equals("nutrition", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.IsNullOrWhiteSpace(comment.NutrientKey) ? "Nutrition checks" : $"Nutrition - {comment.NutrientKey}";
+        }
+
+        if (comment.TargetType.Equals("recipe", StringComparison.OrdinalIgnoreCase))
+        {
+            var recipe = Menu?.Menu.Items.FirstOrDefault(item => item.RecipeId == comment.RecipeId)?.Recipe.RecipeName;
+            return string.IsNullOrWhiteSpace(recipe) ? "Recipe item" : $"Recipe - {recipe}";
+        }
+
+        if (comment.TargetType.Equals("component", StringComparison.OrdinalIgnoreCase))
+        {
+            var dayLabel = comment.DayIndex is null ? "Day" : ReviewBoardStart.AddDays(comment.DayIndex.Value).ToString("ddd MMM d");
+            var component = LegacyReferenceData.MealComponents.FirstOrDefault(item => item.Key == NormalizeCommentComponentKey(comment.ComponentKey ?? string.Empty));
+            return $"{dayLabel} {comment.MealSlot ?? Menu?.Menu.MealType ?? "Meal"} - {component?.Label ?? "Component"}";
+        }
+
+        return "General menu summary";
+    }
+
+    private static string CommentSnippet(string body)
+    {
+        const int maxLength = 82;
+        var cleanBody = body.Trim();
+        return cleanBody.Length <= maxLength ? cleanBody : $"{cleanBody[..maxLength]}...";
+    }
+
+    private static string CleanSummaryLine(string body) =>
+        string.Join(' ', body.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Trim();
+
+    private static string Plural(int count) => count == 1 ? string.Empty : "s";
+
+    private static string FormatDateRange(DateTime? startDate, DateTime? endDate)
+    {
+        if (startDate is null && endDate is null)
+        {
+            return "Not listed";
+        }
+
+        if (startDate is null)
+        {
+            return endDate!.Value.ToString("MMM d, yyyy");
+        }
+
+        if (endDate is null || startDate.Value.Date == endDate.Value.Date)
+        {
+            return startDate.Value.ToString("MMM d, yyyy");
+        }
+
+        return $"{startDate.Value:MMM d, yyyy} to {endDate.Value:MMM d, yyyy}";
+    }
+
+    private static bool IsCommentVisibleInReviewThread(MenuReviewCommentDto comment)
+    {
+        if (comment.Visibility.Equals("Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!comment.IsUserComment)
+        {
+            return false;
+        }
+
+        if (comment.Action.Equals(ReviewSentAction, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return comment.Action.Contains("Comment", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Correction", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Response", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWorkflowEvent(MenuReviewCommentDto comment)
+    {
+        if (comment.Action.Equals(ReviewCommentAction, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return comment.Action.Equals("Created", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Equals("Submitted", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Equals(ReviewSentAction, StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Provider response", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Resubmitted", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Approved", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string WorkflowStageKey(MenuReviewCommentDto comment)
+    {
+        if (comment.Action.Contains("Created", StringComparison.OrdinalIgnoreCase))
+        {
+            return "created";
+        }
+
+        if (comment.Action.Contains("Submitted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "submitted";
+        }
+
+        if (comment.Action.Equals(ReviewSentAction, StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Returned", StringComparison.OrdinalIgnoreCase))
+        {
+            return "comments-sent";
+        }
+
+        if (comment.Action.Contains("Provider response", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Resubmitted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "provider-response";
+        }
+
+        if (comment.Action.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+            || comment.Action.Contains("Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            return "approval";
+        }
+
+        return comment.Action.ToLowerInvariant();
+    }
+
+    private static string WorkflowActionLabel(MenuReviewCommentDto comment)
+    {
+        var stage = WorkflowStageKey(comment);
+        return stage switch
+        {
+            "created" => "Created",
+            "submitted" => "Submitted",
+            "comments-sent" => "Comments sent",
+            "provider-response" => "Provider response",
+            "approval" => "Approval",
+            _ => comment.Action
+        };
+    }
+
+    private IEnumerable<ReviewAttentionItem> BuildReviewAttentionItems()
+    {
+        if (Menu is null)
+        {
+            return [];
+        }
+
+        var items = new List<ReviewAttentionItem>();
+        foreach (var status in Menu.Analysis.Statuses.Where(status => !status.Status.Equals("pass", StringComparison.OrdinalIgnoreCase)))
+        {
+            var nutrientLabel = status.NutrientKey.Replace("_", " ");
+            items.Add(new ReviewAttentionItem(
+                status.Status.Equals("fail", StringComparison.OrdinalIgnoreCase) ? "Fail" : "Warning",
+                nutrientLabel,
+                status.Message,
+                status.Status.Equals("fail", StringComparison.OrdinalIgnoreCase) ? "bad" : "warn",
+                new CommentTarget("nutrition", $"Nutrition - {nutrientLabel}", NutrientKey: status.NutrientKey)));
+        }
+
+        foreach (var requirement in Menu.Analysis.MealRequirements.Where(requirement => !requirement.Status.Equals("pass", StringComparison.OrdinalIgnoreCase)))
+        {
+            items.Add(new ReviewAttentionItem(
+                requirement.Status.Equals("fail", StringComparison.OrdinalIgnoreCase) ? "Fail" : "Check",
+                requirement.Title,
+                requirement.Message,
+                requirement.Status.Equals("fail", StringComparison.OrdinalIgnoreCase) ? "bad" : "warn",
+                GeneralMenuTarget));
+        }
+
+        foreach (var group in Menu.Menu.Items.GroupBy(item => item.Recipe.RecipeName).Where(group => group.Count() > 1).OrderByDescending(group => group.Count()).Take(3))
+        {
+            var firstItem = group.OrderBy(item => item.DayIndex).ThenBy(item => item.Position).First();
+            items.Add(new ReviewAttentionItem(
+                "Check",
+                "Repeated recipe",
+                $"{group.Key} appears {group.Count()} times in this menu.",
+                "warn",
+                RecipeTarget(firstItem)));
+        }
+
+        var repeatedEntree = Menu.Menu.Items
+            .Where(item => NormalizeCommentComponentKey(item.ComponentKey ?? ExtractComponentFromMealSlot(item.MealSlot) ?? item.Recipe.Category) == "entree")
+            .GroupBy(item => item.Recipe.RecipeName)
+            .Where(group => group.Count() > 1)
+            .OrderByDescending(group => group.Count())
+            .FirstOrDefault();
+
+        if (repeatedEntree is not null)
+        {
+            var firstEntree = repeatedEntree.OrderBy(item => item.DayIndex).ThenBy(item => item.Position).First();
+            items.Add(new ReviewAttentionItem(
+                "Check",
+                "Entrée repetition",
+                $"{repeatedEntree.Key} is used as an entrée {repeatedEntree.Count()} times.",
+                "warn",
+                RecipeTarget(firstEntree)));
+        }
+
+        if (!items.Any())
+        {
+            items.Add(new ReviewAttentionItem(
+                "OK",
+                "No attention items found",
+                "Nutrition, component, and repetition checks did not flag this menu.",
+                "good"));
+        }
+
+        return items;
+    }
+
+    private static string TargetKey(MenuReviewCommentDto comment) =>
+        TargetKey(comment.TargetType, comment.DayIndex, comment.MealSlot, comment.ComponentKey, comment.RecipeId, comment.NutrientKey);
+
+    private static string TargetKey(CommentTarget target) =>
+        TargetKey(target.TargetType, target.DayIndex, target.MealSlot, target.ComponentKey, target.RecipeId, target.NutrientKey);
+
+    private static string TargetKey(string? targetType, int? dayIndex, string? mealSlot, string? componentKey, int? recipeId, string? nutrientKey)
+    {
+        var normalizedType = string.IsNullOrWhiteSpace(targetType) ? "menu" : targetType.Trim().ToLowerInvariant();
+        if (normalizedType == "recipe" && recipeId is not null)
+        {
+            return $"recipe:{recipeId}";
+        }
+
+        if (normalizedType == "nutrition")
+        {
+            return $"nutrition:{NormalizeToken(nutrientKey)}";
+        }
+
+        if (normalizedType == "component")
+        {
+            return $"component:{dayIndex?.ToString() ?? "any"}:{NormalizeToken(mealSlot)}:{NormalizeCommentComponentKey(componentKey ?? string.Empty)}";
+        }
+
+        return "menu";
+    }
+
+    private static string MealNameFromSlot(string? mealSlot, string? fallback)
+    {
+        if (string.IsNullOrWhiteSpace(mealSlot))
+        {
+            return string.IsNullOrWhiteSpace(fallback) ? "Meal" : fallback!;
+        }
+
+        var mealName = mealSlot.Split('_', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? mealSlot;
+        return mealName.Length <= 1 ? mealName.ToUpperInvariant() : $"{char.ToUpperInvariant(mealName[0])}{mealName[1..].ToLowerInvariant()}";
+    }
+
+    private static string MealKeyFromSlot(string? mealSlot, string? fallback)
+    {
+        var mealName = MealNameFromSlot(mealSlot, fallback);
+        return mealName.ToLowerInvariant() switch
+        {
+            "breakfast" => "breakfast",
+            "lunch" => "lunch",
+            "dinner" => "dinner",
+            _ => mealName.ToLowerInvariant()
+        };
+    }
+
+    private static string ReviewScopeLabel(string scope) => scope.ToLowerInvariant() switch
+    {
+        AllMealsScope => "All meals",
+        "breakfast" => "Breakfast",
+        "lunch" => "Lunch",
+        "dinner" => "Dinner",
+        _ => scope.Length <= 1 ? scope.ToUpperInvariant() : $"{char.ToUpperInvariant(scope[0])}{scope[1..].ToLowerInvariant()}"
+    };
+
+    private static int MealSortOrder(string mealKey) => mealKey.ToLowerInvariant() switch
+    {
+        "breakfast" => 1,
+        "lunch" => 2,
+        "dinner" => 3,
+        _ => 9
+    };
+
+    private static string? ExtractComponentFromMealSlot(string? mealSlot)
+    {
+        if (string.IsNullOrWhiteSpace(mealSlot) || !mealSlot.Contains('_', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return mealSlot.Split('_', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+    }
+
+    private static string NormalizeCommentComponentKey(string componentKey) => componentKey.ToLowerInvariant() switch
+    {
+        "grain" => "grains",
+        "side" => "vegetable",
+        "milk" => "dairy",
+        "main" => "entree",
+        "juice" => "juice-dessert",
+        "dessert" => "juice-dessert",
+        "" => "entree",
+        _ => componentKey.ToLowerInvariant()
+    };
+
+    private static string NormalizeToken(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "general" : value.Trim().ToLowerInvariant().Replace(" ", "-");
+
+    private void OpenAsDraft()
+    {
+        if (Menu is null)
+        {
+            return;
+        }
+
+        var draft = MenuReuseMapper.FromMenu(Menu, preserveDates: false, sourceType: "past-menu");
+        if (IsProvider)
+        {
+            draft.ContractName = AppMode.ProviderContract;
+            draft.Contracts = [AppMode.ProviderContract];
+            draft.CreatedBy = AppMode.ProviderContract;
+        }
+
+        Drafts.Set(draft);
+
+        Navigation.NavigateTo("/menus/new");
+    }
+
+    private void ResetDraftFields()
+    {
+        if (Menu is null)
+        {
+            return;
+        }
+
+        DraftName = Menu.Menu.Name;
+        DraftStartDate = Menu.Menu.StartDate ?? Menu.Menu.ServiceDate;
+        DraftDaysPerWeek = Menu.Menu.DaysPerWeek;
+        DraftCycleWeek = Menu.Menu.CycleWeek;
+    }
+
+    private void ResetDraftItems()
+    {
+        if (Menu is null)
+        {
+            return;
+        }
+
+        DraftItems = Menu.Menu.Items
+            .OrderBy(item => item.DayIndex)
+            .ThenBy(item => item.Position)
+            .Select(item => new MenuItemDetailDto
+            {
+                RecipeId = item.RecipeId,
+                Position = item.Position,
+                DayIndex = item.DayIndex,
+                MealSlot = item.MealSlot,
+                ComponentKey = item.ComponentKey,
+                IsAlternate = item.IsAlternate,
+                SourceType = item.SourceType,
+                Recipe = item.Recipe
+            })
+            .ToList();
+
+        NormalizeDraftItemPositions();
+    }
+
+    private void RemoveDraftItem(MenuItemDetailDto item)
+    {
+        DraftItems.Remove(item);
+        NormalizeDraftItemPositions();
+    }
+
+    private void BeginDragDraftItem(int index)
+    {
+        DragDraftIndex = index;
+    }
+
+    private void EndDragDraftItem()
+    {
+        DragDraftIndex = null;
+        HoverDraftIndex = null;
+    }
+
+    private void DropDraftItemAt(int targetIndex)
+    {
+        if (DragDraftIndex is null)
+        {
+            return;
+        }
+
+        var sourceIndex = DragDraftIndex.Value;
+        if (sourceIndex == targetIndex || sourceIndex < 0 || sourceIndex >= DraftItems.Count || targetIndex < 0 || targetIndex >= DraftItems.Count)
+        {
+            DragDraftIndex = null;
+            return;
+        }
+
+        var item = DraftItems[sourceIndex];
+        DraftItems.RemoveAt(sourceIndex);
+        if (sourceIndex < targetIndex)
+        {
+            targetIndex--;
+        }
+
+        DraftItems.Insert(targetIndex, item);
+        DragDraftIndex = null;
+        HoverDraftIndex = null;
+        NormalizeDraftItemPositions();
+        _ = PulseDroppedItemAsync(targetIndex);
+    }
+
+    private async Task PulseDroppedItemAsync(int index)
+    {
+        DropDraftPulseIndex = index;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(250);
+        if (DropDraftPulseIndex == index)
+        {
+            DropDraftPulseIndex = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void NormalizeDraftItemPositions()
+    {
+        for (var i = 0; i < DraftItems.Count; i++)
+        {
+            DraftItems[i].Position = i + 1;
+        }
+    }
+
+    private string GetMealMixSummary()
+    {
+        if (Menu is null || Menu.Menu.Items.Count == 0)
+        {
+            return "No items placed";
+        }
+
+        var counts = Menu.Menu.Items
+            .GroupBy(item => MealKeyFromSlot(item.MealSlot, Menu.Menu.MealType))
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var mealParts = new[] { "breakfast", "lunch", "dinner" }
+            .Where(meal => counts.GetValueOrDefault(meal) > 0)
+            .Select(meal => $"{counts.GetValueOrDefault(meal)} {meal} item{(counts.GetValueOrDefault(meal) == 1 ? "" : "s")}")
+            .ToList();
+
+        return mealParts.Count == 0 ? "No meal items placed" : string.Join(", ", mealParts);
+    }
+
+    private int GetRepeatedRecipeCount() => Menu?.Menu.Items
+        .GroupBy(item => item.RecipeId)
+        .Count(group => group.Count() > 1) ?? 0;
+
+    private int GetUniqueRecipeCount() => Menu?.Menu.Items
+        .Select(item => item.RecipeId)
+        .Distinct()
+        .Count() ?? 0;
+
+    private string GetRecipeRepetitionSummary()
+    {
+        var repeatedRecipes = Menu?.Menu.Items
+            .GroupBy(item => item.Recipe.RecipeName)
+            .Where(group => group.Count() > 1)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key)
+            .ToList() ?? [];
+
+        if (repeatedRecipes.Count == 0)
+        {
+            return "No recipe used more than once";
+        }
+
+        var topRepeat = repeatedRecipes[0];
+        var moreCount = repeatedRecipes.Count - 1;
+        return moreCount == 0
+            ? $"{topRepeat.Key} appears {topRepeat.Count()} times"
+            : $"{topRepeat.Key} appears {topRepeat.Count()} times; {moreCount} more repeated";
+    }
+
+    private string GetNutritionSummary()
+    {
+        var warnings = Menu?.Analysis.Statuses.Where(status => status.Status != "pass").Select(status => status.NutrientKey).ToList() ?? [];
+        if (warnings.Count == 0)
+        {
+            return "Passing all nutrition checks";
+        }
+
+        return $"Watch: {string.Join(", ", warnings)}";
+    }
+
+    private string GetMenuDescriptor()
+    {
+        if (Menu is null)
+        {
+            return "—";
+        }
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(Menu.Menu.ProgramType))
+        {
+            parts.Add(Menu.Menu.ProgramType!);
+        }
+        if (!string.IsNullOrWhiteSpace(Menu.Menu.MenuFormat))
+        {
+            parts.Add(Menu.Menu.MenuFormat!);
+        }
+
+        return parts.Count == 0 ? "—" : string.Join(" · ", parts);
+    }
+
+    private static string MealShortName(string mealSlot) => mealSlot.ToLowerInvariant() switch
+    {
+        "breakfast" => "B",
+        "lunch" => "L",
+        "dinner" => "D",
+        _ => "?"
+    };
+
+    private static string MealBadgeClass(string mealSlot) => mealSlot.ToLowerInvariant() switch
+    {
+        "breakfast" => "meal-breakfast",
+        "lunch" => "meal-lunch",
+        "dinner" => "meal-dinner",
+        _ => string.Empty
+    };
+
+    private static string MealBadgeClassFromMealType(string mealType) => mealType.ToLowerInvariant() switch
+    {
+        "breakfast" => "meal-breakfast",
+        "lunch" => "meal-lunch",
+        "dinner" => "meal-dinner",
+        "snack" => "meal-lunch",
+        _ => string.Empty
+    };
+
+    private static string MealShortNameFromMealType(string mealType) => mealType.ToLowerInvariant() switch
+    {
+        "breakfast" => "B",
+        "lunch" => "L",
+        "dinner" => "D",
+        "snack" => "S",
+        _ => "?"
+    };
+
+    private List<MenuReviewCommentDto> BuildReviewComments(IEnumerable<MenuReviewCommentDto> savedComments)
+    {
+        if (Menu is null)
+        {
+            return [];
+        }
+
+        var menu = Menu.Menu;
+        var savedCommentList = savedComments.ToList();
+        var hasSavedReturnedComment = !string.IsNullOrWhiteSpace(menu.ReturnedComments)
+            && savedCommentList.Any(comment => comment.Action.Contains("Correction", StringComparison.OrdinalIgnoreCase)
+                && comment.Body.Equals(menu.ReturnedComments, StringComparison.OrdinalIgnoreCase));
+        var hasSavedApprovalComment = !string.IsNullOrWhiteSpace(menu.ApprovalNotes)
+            && savedCommentList.Any(comment => comment.Action.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+                && comment.Body.Equals(menu.ApprovalNotes, StringComparison.OrdinalIgnoreCase));
+        var comments = new List<MenuReviewCommentDto>
+        {
+            SyntheticReviewComment(
+                menu.Id,
+                menu.CreatedAt,
+                "Created",
+                menu.CreatedBy ?? "Menu staff",
+                "Provider / Caterer",
+                $"Created {menu.Name} for {menu.ContractName ?? string.Join(", ", menu.Contracts)}.",
+                "Internal",
+                "brand",
+                false)
+        };
+
+        if (menu.SubmittedToNycAgingOn is not null)
+        {
+            comments.Add(SyntheticReviewComment(
+                menu.Id,
+                menu.SubmittedToNycAgingOn.Value,
+                "Submitted",
+                menu.CreatedBy ?? "Menu staff",
+                "Provider / Caterer",
+                $"Submitted to NYC Aging for {menu.MealType} review.",
+                "Admin and provider",
+                "brand",
+                false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ReturnedComments) && !hasSavedReturnedComment)
+        {
+            comments.Add(SyntheticReviewComment(
+                menu.Id,
+                menu.StatusDate ?? DateTime.Today,
+                "Returned correction",
+                menu.NutritionAdvisor ?? "NYC Aging Nutrition Unit",
+                "Admin / Department staff",
+                menu.ReturnedComments!,
+                "Admin and provider",
+                "warn",
+                false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(menu.ApprovalNotes) && !hasSavedApprovalComment)
+        {
+            comments.Add(SyntheticReviewComment(
+                menu.Id,
+                menu.StatusDate ?? DateTime.Today,
+                "Approval note",
+                menu.NutritionAdvisor ?? "NYC Aging Nutrition Unit",
+                "Admin / Department staff",
+                menu.ApprovalNotes!,
+                "Admin and provider",
+                "good",
+                false));
+        }
+
+        comments.Add(SyntheticReviewComment(
+            menu.Id,
+            menu.StatusDate ?? menu.CreatedAt,
+            menu.Status,
+            menu.SubmittedTo ?? "Simple Servings",
+            "System status",
+            $"Current menu status is {menu.Status}.",
+            "Admin and provider",
+            BadgeClassForStatus(menu.Status),
+            false));
+
+        comments.AddRange(savedCommentList);
+
+        return comments
+            .OrderByDescending(comment => comment.CreatedAt)
+            .ThenByDescending(comment => comment.Action)
+            .ToList();
+    }
+
+    private static MenuReviewCommentDto SyntheticReviewComment(
+        int menuId,
+        DateTime createdAt,
+        string action,
+        string author,
+        string role,
+        string body,
+        string visibility,
+        string badgeClass,
+        bool isUserComment,
+        string targetType = "menu",
+        string? targetLabel = "General menu summary",
+        int? dayIndex = null,
+        string? mealSlot = null,
+        string? componentKey = null,
+        int? recipeId = null,
+        string? nutrientKey = null,
+        string reviewStatus = "open") => new()
+        {
+            Id = 0,
+            MenuId = menuId,
+            CreatedAt = createdAt,
+            Action = action,
+            Author = author,
+            Role = role,
+            Body = body,
+            Visibility = visibility,
+            BadgeClass = badgeClass,
+            IsUserComment = isUserComment,
+            TargetType = targetType,
+            TargetLabel = targetLabel,
+            DayIndex = dayIndex,
+            MealSlot = mealSlot,
+            ComponentKey = componentKey,
+            RecipeId = recipeId,
+            NutrientKey = nutrientKey,
+            ReviewStatus = reviewStatus
+        };
+
+    private static string BadgeClassForStatus(string status)
+    {
+        if (status.Contains("Approved", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("Completed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "good";
+        }
+
+        if (status.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("Correction", StringComparison.OrdinalIgnoreCase))
+        {
+            return "warn";
+        }
+
+        return "brand";
+    }
+
+    private static string BadgeClassForAction(string action)
+    {
+        if (action.Contains("Approval", StringComparison.OrdinalIgnoreCase))
+        {
+            return "good";
+        }
+
+        if (action.Contains("Correction", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Returned", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Question", StringComparison.OrdinalIgnoreCase))
+        {
+            return "warn";
+        }
+
+        return "brand";
+    }
+
+    private static string? GetQueryValue(string uri, string key)
+    {
+        var query = new Uri(uri).Query.TrimStart('?');
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        foreach (var segment in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = segment.Split('=', 2);
+            if (parts.Length == 2 && parts[0].Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(parts[1]);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsValidReviewPerspective(string? perspective) =>
+        perspective is not null
+        && new[]
+        {
+            ThisMenuPerspective,
+            SameProviderPerspective,
+            SameProviderCyclePerspective,
+            SameProviderMealPerspective,
+            SameProviderNeedsReviewPerspective
+        }.Contains(perspective, StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Menu = await Api.GetMenuAsync(MenuId);
+        AllMenus = await Api.GetMenusAsync();
+        if (Menu is not null)
+        {
+            ResetDraftFields();
+            ResetDraftItems();
+            var savedComments = await Api.GetMenuCommentsAsync(MenuId);
+            ReviewComments = BuildReviewComments(savedComments);
+        }
+
+        var requestedTab = GetQueryValue(Navigation.Uri, "tab");
+        var requestedPerspective = GetQueryValue(Navigation.Uri, "perspective");
+        if (IsValidReviewPerspective(requestedPerspective))
+        {
+            ReviewPerspective = requestedPerspective!;
+        }
+
+        if (requestedTab?.Equals(CommentsTab, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            SetMenuDetailsTab(CommentsTab);
+        }
+        else if (requestedTab?.Equals(InsightsTab, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            SetMenuDetailsTab(InsightsTab);
+        }
+        else if (requestedTab?.Equals(ReviewTab, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            SetMenuDetailsTab(ReviewTab);
+        }
+        else if (!CanUseMenuDetailsTab(MenuDetailsTab))
+        {
+            SetMenuDetailsTab(CommentsTab);
+        }
+
+        CommentMessage = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            _dragDropModule = await Js.InvokeAsync<IJSObjectReference>("import", "./js/dragDropBridge.js");
+            await _dragDropModule.InvokeVoidAsync("attachDragPayloads", _pageRoot, _dotNetRef);
+        }
+        catch
+        {
+            _dragDropModule = null;
+            _dotNetRef?.Dispose();
+            _dotNetRef = null;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_dragDropModule is not null)
+            {
+                await _dragDropModule.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The user may navigate away or stop the dev server while the circuit is disposing.
+        }
+
+        _dotNetRef?.Dispose();
+    }
+
+    private sealed record CommentTarget(
+        string TargetType,
+        string Label,
+        int? DayIndex = null,
+        string? MealSlot = null,
+        string? ComponentKey = null,
+        int? RecipeId = null,
+        string? NutrientKey = null);
+
+    private sealed record ReviewScopeOption(string Key, string Label);
+
+    private sealed record ReviewPerspectiveOption(string Key, string Label);
+
+    private sealed record MealComparisonRow(string MealName, int ItemCount, decimal Calories, decimal SodiumMg, int ComponentCount);
+
+    private sealed record ReviewAttentionItem(string Severity, string Title, string Detail, string BadgeClass, CommentTarget? Target = null);
+}

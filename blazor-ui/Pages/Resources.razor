@@ -1,0 +1,251 @@
+@page "/resources"
+
+<div class="grid resources-page" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Resources</div>
+                <h2 style="margin-bottom: 6px">Resource files</h2>
+                <p class="muted" style="margin: 0">Forms, nutrition messages, nutrition policies, and quarterly food service trainings.</p>
+            </div>
+            <span class="status-badge">@VisibleResources.Count() file@(VisibleResources.Count() == 1 ? "" : "s")</span>
+        </div>
+    </section>
+
+    <div class="resources-file-layout compact-resource-browser">
+        <aside class="section resource-nav-panel">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Resource Type</div>
+                    <h3>Folders</h3>
+                </div>
+            </div>
+            <div class="resource-nav">
+                <button type="button" class="resource-nav-item @(SelectedResourceType == AllMode ? "active" : "")" @onclick="() => SelectResourceType(AllMode)">
+                    <span class="resource-nav-title">All resources</span>
+                    <span class="resource-nav-subtitle">@ResourceItems.Count files</span>
+                </button>
+                @foreach (var type in LegacyReferenceData.ResourceTypes)
+                {
+                    <button type="button" class="resource-nav-item @(SelectedResourceType == type ? "active" : "")" @onclick="() => SelectResourceType(type)">
+                        <span class="resource-nav-title">@type</span>
+                        <span class="resource-nav-subtitle">@ResourceItems.Count(item => item.ResourceType == type) files</span>
+                    </button>
+                }
+            </div>
+        </aside>
+
+        <section class="section resources-list-panel">
+            <div class="section-header">
+                <div>
+                    <h3 style="margin-bottom: 6px">Files</h3>
+                </div>
+                <InputText class="input compact-input resource-search" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search resources" />
+            </div>
+
+            @if (IsAdmin)
+            {
+                <details class="setup-details resource-add-details">
+                    <summary>Add resource file</summary>
+                    <div class="resource-add-form">
+                        <label>
+                            <div class="small muted">Title</div>
+                            <InputText class="input" @bind-Value="NewResourceTitle" />
+                        </label>
+                        <label>
+                            <div class="small muted">Type</div>
+                            <InputSelect class="input" @bind-Value="NewResourceType">
+                                @foreach (var type in LegacyReferenceData.ResourceTypes)
+                                {
+                                    <option value="@type">@type</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label>
+                            <div class="small muted">Description</div>
+                            <InputText class="input" @bind-Value="NewResourceDescription" placeholder="One-line summary for staff and providers" />
+                        </label>
+                        <label>
+                            <div class="small muted">Audience</div>
+                            <InputSelect class="input" @bind-Value="NewResourceAudience">
+                                @foreach (var audience in ResourceAudienceOptions)
+                                {
+                                    <option value="@audience">@audience</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label>
+                            <div class="small muted">Last updated</div>
+                            <InputDate class="input" @bind-Value="NewResourceLastUpdated" />
+                        </label>
+                        <label>
+                            <div class="small muted">Uploaded by</div>
+                            <InputText class="input" @bind-Value="NewResourceUploadedBy" />
+                        </label>
+                        <div>
+                            <div class="small muted">File</div>
+                            <div class="file-upload-control">
+                                <label class="file-upload-button" for="resource-file-input">Choose file</label>
+                                <span class="file-upload-name">@(string.IsNullOrWhiteSpace(NewResourcePath) ? "No file chosen" : NewResourcePath)</span>
+                                <InputFile id="resource-file-input" class="file-upload-input" OnChange="OnFileSelected" />
+                            </div>
+                        </div>
+                        <div class="resource-add-actions">
+                            <button type="button" class="button" @onclick="AddResource">Add resource</button>
+                        </div>
+                    </div>
+                </details>
+            }
+
+            <div class="admin-table-wrap" style="margin-top: 14px">
+                <table class="admin-table resources-table">
+                    <thead>
+                        <tr>
+                            <th>Resource</th>
+                            <th>Resource Type</th>
+                            <th>Description</th>
+                            <th>Audience</th>
+                            <th>Last Updated</th>
+                            <th>@(IsAdmin ? "Actions" : "Open")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var resource in VisibleResources)
+                        {
+                            <tr>
+                                <td><strong>@resource.Title</strong></td>
+                                <td>@resource.ResourceType</td>
+                                <td><span class="muted small">@resource.Description</span></td>
+                                <td><span class="tag-chip">@resource.Audience</span></td>
+                                <td>
+                                    <div>@FormatResourceDate(resource.LastUpdated)</div>
+                                    @if (IsAdmin)
+                                    {
+                                        <div class="muted small">by @DisplayUploadedBy(resource.UploadedBy)</div>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="resource-table-actions">
+                                        <button type="button" class="secondary-button tiny-button" @onclick="() => OpenResource(resource)">Open</button>
+                                        @if (IsAdmin)
+                                        {
+                                            <button type="button" class="ghost-button tiny-button" @onclick="() => RemoveResource(resource)">Remove</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <div class="empty-state" style="margin-top: 12px; text-align: left">@Message</div>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
+    private const string AllMode = "all";
+    private List<LegacyResourceItem> ResourceItems { get; set; } = [.. LegacyReferenceData.Resources];
+    private string SelectedResourceType { get; set; } = AllMode;
+    private string SearchText { get; set; } = string.Empty;
+    private string NewResourceTitle { get; set; } = string.Empty;
+    private string NewResourceType { get; set; } = LegacyReferenceData.ResourceTypes[0];
+    private string NewResourceDescription { get; set; } = string.Empty;
+    private string NewResourcePath { get; set; } = string.Empty;
+    private string NewResourceAudience { get; set; } = "Staff + Providers";
+    private DateTime? NewResourceLastUpdated { get; set; } = DateTime.Today;
+    private string NewResourceUploadedBy { get; set; } = "NYC Aging Nutrition Unit";
+    private string? Message { get; set; }
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+    private static readonly string[] ResourceAudienceOptions = ["Staff", "Providers", "Staff + Providers"];
+
+    private IEnumerable<LegacyResourceItem> VisibleResources =>
+        ResourceItems
+            .Where(resource => SelectedResourceType == AllMode || resource.ResourceType.Equals(SelectedResourceType, StringComparison.OrdinalIgnoreCase))
+            .Where(resource => string.IsNullOrWhiteSpace(SearchText)
+                || resource.Title.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || resource.ResourceType.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || resource.Description.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || resource.Audience.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || resource.UploadedBy.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                || FormatResourceDate(resource.LastUpdated).Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(resource => resource.ResourceType)
+            .ThenByDescending(resource => resource.LastUpdated ?? DateTime.MinValue)
+            .ThenBy(resource => resource.Title);
+
+    private void SelectResourceType(string type)
+    {
+        SelectedResourceType = type;
+        Message = null;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs args)
+    {
+        NewResourcePath = args.File.Name;
+        if (string.IsNullOrWhiteSpace(NewResourceTitle))
+        {
+            NewResourceTitle = Path.GetFileNameWithoutExtension(args.File.Name);
+        }
+    }
+
+    private void AddResource()
+    {
+        if (string.IsNullOrWhiteSpace(NewResourceTitle))
+        {
+            Message = "Enter a title before adding a resource.";
+            return;
+        }
+
+        var path = string.IsNullOrWhiteSpace(NewResourcePath) ? "~/Resource/new-resource.pdf" : $"~/Resource/{NewResourcePath}";
+        var description = string.IsNullOrWhiteSpace(NewResourceDescription)
+            ? "Staff-uploaded reference file awaiting a final description."
+            : NewResourceDescription.Trim();
+        ResourceItems.Add(new LegacyResourceItem(
+            NewResourceTitle.Trim(),
+            NewResourceType,
+            path,
+            description,
+            NewResourceLastUpdated,
+            NewResourceAudience,
+            string.IsNullOrWhiteSpace(NewResourceUploadedBy) ? "NYC Aging Nutrition Unit" : NewResourceUploadedBy.Trim()));
+        SelectedResourceType = NewResourceType;
+        Message = $"{NewResourceTitle} added to {NewResourceType}.";
+        NewResourceTitle = string.Empty;
+        NewResourceDescription = string.Empty;
+        NewResourcePath = string.Empty;
+        NewResourceAudience = "Staff + Providers";
+        NewResourceLastUpdated = DateTime.Today;
+        NewResourceUploadedBy = "NYC Aging Nutrition Unit";
+    }
+
+    private void OpenResource(LegacyResourceItem resource)
+    {
+        Message = $"Selected: {resource.Title}.";
+    }
+
+    private void RemoveResource(LegacyResourceItem resource)
+    {
+        ResourceItems.Remove(resource);
+        Message = $"{resource.Title} removed from the visible resource list.";
+    }
+
+    private static string FormatResourceDate(DateTime? date) =>
+        date?.ToString("MMM d, yyyy") ?? "Not recorded";
+
+    private static string DisplayUploadedBy(string uploadedBy)
+    {
+        if (string.IsNullOrWhiteSpace(uploadedBy))
+        {
+            return "Not recorded";
+        }
+
+        return uploadedBy
+            .Replace("NYC Aging ", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Trim();
+    }
+}
