@@ -97,15 +97,13 @@
                 </details>
             }
 
-            <div class="admin-table-wrap" style="margin-top: 14px">
+            <div class="admin-table-wrap resources-table-wrap" style="margin-top: 14px">
                 <table class="admin-table resources-table">
                     <thead>
                         <tr>
                             <th>Resource</th>
-                            <th>Resource Type</th>
-                            <th>Description</th>
-                            <th>Audience</th>
-                            <th>Last Updated</th>
+                            <th>Type / Audience</th>
+                            <th>Updated</th>
                             <th>@(IsAdmin ? "Actions" : "Open")</th>
                         </tr>
                     </thead>
@@ -113,10 +111,18 @@
                         @foreach (var resource in VisibleResources)
                         {
                             <tr>
-                                <td><strong>@resource.Title</strong></td>
-                                <td>@resource.ResourceType</td>
-                                <td><span class="muted small">@resource.Description</span></td>
-                                <td><span class="tag-chip">@resource.Audience</span></td>
+                                <td>
+                                    <div class="table-main resource-file-cell">
+                                        <strong>@resource.Title</strong>
+                                        <span class="muted small">@resource.Description</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="resource-meta-stack">
+                                        <span>@resource.ResourceType</span>
+                                        <span class="tag-chip">@resource.Audience</span>
+                                    </div>
+                                </td>
                                 <td>
                                     <div>@FormatResourceDate(resource.LastUpdated)</div>
                                     @if (IsAdmin)

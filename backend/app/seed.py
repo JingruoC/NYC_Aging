@@ -49,6 +49,12 @@ RECIPES = [
     {"recipe_id": 38, "recipe_name": "Honey Glazed Carrots", "meal_type": "dinner", "category": "vegetable", "calories": 85, "sodium_mg": 75, "protein_g": 1, "fiber_g": 3, "fat_g": 2, "tags": ["vegetarian"], "is_approved": True},
     {"recipe_id": 39, "recipe_name": "Fruit Salad Cup", "meal_type": "snack", "category": "fruit", "calories": 75, "sodium_mg": 10, "protein_g": 1, "fiber_g": 3, "fat_g": 0, "tags": ["fresh fruit", "low sodium"], "is_approved": True},
     {"recipe_id": 40, "recipe_name": "Egg Salad Sandwich", "meal_type": "lunch", "category": "entree", "calories": 310, "sodium_mg": 530, "protein_g": 14, "fiber_g": 3, "fat_g": 18, "tags": ["protein"], "is_approved": True},
+    {"recipe_id": 44, "recipe_name": "Low Sodium Tomato Salsa", "meal_type": "lunch", "category": "condiments", "calories": 25, "sodium_mg": 75, "protein_g": 1, "fiber_g": 1, "fat_g": 0, "tags": ["condiments", "low sodium"], "is_approved": True},
+    {"recipe_id": 45, "recipe_name": "Apple Juice Cup", "meal_type": "lunch", "category": "juice-dessert", "calories": 60, "sodium_mg": 5, "protein_g": 0, "fiber_g": 0, "fat_g": 0, "tags": ["juice"], "is_approved": True},
+    {"recipe_id": 46, "recipe_name": "Vanilla Yogurt Cup", "meal_type": "breakfast", "category": "milk", "calories": 120, "sodium_mg": 95, "protein_g": 7, "fiber_g": 0, "fat_g": 2, "tags": ["dairy"], "is_approved": True},
+    {"recipe_id": 47, "recipe_name": "Cranberry Juice Cup", "meal_type": "lunch", "category": "juice-dessert", "calories": 70, "sodium_mg": 10, "protein_g": 0, "fiber_g": 0, "fat_g": 0, "tags": ["juice"], "is_approved": True},
+    {"recipe_id": 48, "recipe_name": "Low Sodium Italian Dressing", "meal_type": "lunch", "category": "condiments", "calories": 35, "sodium_mg": 90, "protein_g": 0, "fiber_g": 0, "fat_g": 3, "tags": ["condiments", "low sodium"], "is_approved": True},
+    {"recipe_id": 49, "recipe_name": "Mustard Packet", "meal_type": "lunch", "category": "condiments", "calories": 5, "sodium_mg": 55, "protein_g": 0, "fiber_g": 0, "fat_g": 0, "tags": ["condiments"], "is_approved": True},
 ]
 
 
@@ -382,6 +388,36 @@ LEGACY_RECIPE_FIELDS = [
     "calcium_mg",
 ]
 
+
+SAVED_MENU_COMPONENT_ORDER = [
+    "appetizer",
+    "entree",
+    "grains",
+    "vegetable",
+    "fruit",
+    "dairy",
+    "juice-dessert",
+    "condiments",
+]
+
+
+def _weekly_component_plan(days: list[dict[str, int | None]]) -> list[dict[str, int | str]]:
+    placements: list[dict[str, int | str]] = []
+    for day_index, day in enumerate(days):
+        for component_key in SAVED_MENU_COMPONENT_ORDER:
+            recipe_id = day.get(component_key)
+            if recipe_id is None:
+                continue
+            placements.append(
+                {
+                    "recipe_id": recipe_id,
+                    "day_index": day_index,
+                    "component_key": component_key,
+                }
+            )
+    return placements
+
+
 SAVED_MENUS = [
     {
         "name": "ABSW OAC July Lunch Cycle - Week 1",
@@ -415,7 +451,15 @@ SAVED_MENUS = [
         "returned_comments": None,
         "approval_notes": None,
         "is_favorite": True,
-        "items": [7, 10, 9, 11, 31, 37, 38, 34, 33, 32, 10, 17, 13, 16, 15, 11, 26, 37, 28, 39],
+        "placements": _weekly_component_plan(
+            [
+                {"appetizer": 12, "entree": 7, "grains": 10, "vegetable": 9, "fruit": 11, "dairy": 4, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 32, "entree": 31, "grains": 37, "vegetable": 8, "fruit": 34, "dairy": 46, "juice-dessert": 47, "condiments": 44},
+                {"appetizer": 20, "entree": 33, "grains": 10, "vegetable": 12, "fruit": 17, "dairy": 4, "juice-dessert": 35, "condiments": 49},
+                {"appetizer": 9, "entree": 40, "grains": 23, "vegetable": 20, "fruit": 39, "dairy": 22, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 32, "entree": 21, "grains": 10, "vegetable": 8, "fruit": 25, "dairy": 30, "juice-dessert": 29, "condiments": 44},
+            ]
+        ),
         "comments": [
             {
                 "created_at": datetime(2026, 7, 9, 10, 15),
@@ -463,7 +507,15 @@ SAVED_MENUS = [
         "returned_comments": "Please replace the high-sodium soup on Wednesday and confirm dairy or non-dairy equivalent for Friday.",
         "approval_notes": None,
         "is_favorite": False,
-        "items": [21, 10, 12, 30, 7, 8, 9, 11, 40, 14, 32, 34, 31, 10, 20, 4, 33, 37, 15, 17],
+        "placements": _weekly_component_plan(
+            [
+                {"appetizer": 12, "entree": 21, "grains": 10, "vegetable": 9, "fruit": 11, "dairy": 4, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 20, "entree": 7, "grains": 10, "vegetable": 8, "fruit": 34, "dairy": 46, "juice-dessert": 47, "condiments": 44},
+                {"appetizer": 32, "entree": 40, "grains": 23, "vegetable": 12, "fruit": 25, "dairy": 30, "juice-dessert": 35, "condiments": 49},
+                {"appetizer": 9, "entree": 31, "grains": 10, "vegetable": 20, "fruit": 39, "dairy": 4, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 12, "entree": 33, "grains": 37, "vegetable": 15, "fruit": 17, "dairy": 22, "juice-dessert": 29, "condiments": 44},
+            ]
+        ),
         "comments": [
             {
                 "created_at": datetime(2026, 7, 11, 9, 30),
@@ -527,7 +579,15 @@ SAVED_MENUS = [
         "returned_comments": None,
         "approval_notes": "Approved for Week 1 breakfast service. Keep milk equivalent visible on printed menu.",
         "is_favorite": False,
-        "items": [1, 6, 4, 2, 3, 4, 1, 11, 4, 5, 3, 6, 2, 6, 4],
+        "placements": _weekly_component_plan(
+            [
+                {"entree": 1, "grains": 3, "fruit": 6, "dairy": 4, "juice-dessert": 45, "condiments": 48},
+                {"entree": 2, "grains": 3, "vegetable": 9, "fruit": 11, "dairy": 46, "juice-dessert": 47, "condiments": 49},
+                {"entree": 5, "grains": 1, "fruit": 6, "dairy": 4, "juice-dessert": 45, "condiments": 44},
+                {"entree": 2, "grains": 3, "vegetable": 32, "fruit": 34, "dairy": 46, "juice-dessert": 47, "condiments": 48},
+                {"entree": 1, "grains": 3, "fruit": 39, "dairy": 4, "juice-dessert": 45, "condiments": 49},
+            ]
+        ),
         "comments": [
             {
                 "created_at": datetime(2026, 7, 10, 14, 0),
@@ -575,7 +635,15 @@ SAVED_MENUS = [
         "returned_comments": None,
         "approval_notes": None,
         "is_favorite": False,
-        "items": [31, 10, 32, 34, 7, 8, 9, 11, 33, 12, 17, 21, 10, 20, 4, 36, 37, 28, 39],
+        "placements": _weekly_component_plan(
+            [
+                {"appetizer": 32, "entree": 31, "grains": 10, "vegetable": 9, "fruit": 34, "dairy": 4, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 12, "entree": 7, "grains": 10, "vegetable": 8, "fruit": 11, "dairy": 46, "juice-dessert": 47, "condiments": 44},
+                {"appetizer": 20, "entree": 33, "grains": 23, "vegetable": 12, "fruit": 17, "dairy": 30, "juice-dessert": 35, "condiments": 49},
+                {"appetizer": 9, "entree": 21, "grains": 10, "vegetable": 20, "fruit": 39, "dairy": 22, "juice-dessert": 45, "condiments": 48},
+                {"appetizer": 32, "entree": 36, "grains": 37, "vegetable": 28, "fruit": 25, "dairy": 4, "juice-dessert": 29, "condiments": 44},
+            ]
+        ),
         "comments": [
             {
                 "created_at": datetime(2026, 7, 12, 11, 20),
@@ -608,6 +676,81 @@ def _component_for_recipe(recipe: Recipe | None, position: int) -> str:
 def _slot_for_menu(menu: dict, component_key: str) -> str:
     meal_type = str(menu["meal_type"]).lower()
     return f"{meal_type}_{component_key}"
+
+
+def _placements_for_saved_menu(menu: dict) -> list[dict[str, int | str]]:
+    if "placements" in menu:
+        return menu["placements"]
+
+    placements: list[dict[str, int | str]] = []
+    for position, recipe_id in enumerate(menu.get("items", []), start=1):
+        placements.append(
+            {
+                "recipe_id": recipe_id,
+                "day_index": (position - 1) // 4,
+                "component_key": "",
+            }
+        )
+    return placements
+
+
+def _replace_saved_menu_items(session, menu: Menu, menu_row: dict) -> None:
+    existing_items = session.scalars(select(MenuItem).where(MenuItem.menu_id == menu.id)).all()
+    for item in existing_items:
+        session.delete(item)
+    session.flush()
+
+    for position, placement in enumerate(_placements_for_saved_menu(menu_row), start=1):
+        recipe = session.get(Recipe, placement["recipe_id"])
+        component_key = placement.get("component_key") or _component_for_recipe(recipe, position)
+        session.add(
+            MenuItem(
+                menu_id=menu.id,
+                recipe_id=placement["recipe_id"],
+                position=position,
+                day_index=placement["day_index"],
+                meal_slot=_slot_for_menu(menu_row, component_key),
+                component_key=component_key,
+                is_alternate=component_key == "alternate",
+                source_type="seed",
+            )
+        )
+
+
+def _sync_saved_menu_metadata(menu: Menu, menu_row: dict) -> None:
+    for field in [
+        "contract_name",
+        "program_type",
+        "meal_type",
+        "menu_coverage",
+        "diet_type",
+        "menu_format",
+        "menu_duration_type",
+        "meal_served_format",
+        "menu_tags",
+        "cycle",
+        "cycle_start_date",
+        "cycle_end_date",
+        "contracts",
+        "completed_weeks",
+        "submitted_programs",
+        "status",
+        "status_date",
+        "submitted_to",
+        "submitted_to_nyc_aging_on",
+        "nutrition_advisor",
+        "created_by",
+        "service_date",
+        "start_date",
+        "end_date",
+        "days_per_week",
+        "cycle_week",
+        "notes",
+        "returned_comments",
+        "approval_notes",
+        "is_favorite",
+    ]:
+        setattr(menu, field, menu_row[field])
 
 
 def seed_database() -> None:
@@ -706,21 +849,7 @@ def seed_database() -> None:
                 )
                 session.add(menu)
                 session.flush()
-                for position, recipe_id in enumerate(menu_row["items"], start=1):
-                    recipe = session.get(Recipe, recipe_id)
-                    component_key = _component_for_recipe(recipe, position)
-                    session.add(
-                        MenuItem(
-                            menu_id=menu.id,
-                            recipe_id=recipe_id,
-                            position=position,
-                            day_index=(position - 1) // 4,
-                            meal_slot=_slot_for_menu(menu_row, component_key),
-                            component_key=component_key,
-                            is_alternate=component_key == "alternate",
-                            source_type="seed",
-                        )
-                    )
+                _replace_saved_menu_items(session, menu, menu_row)
                 for comment_row in menu_row["comments"]:
                     session.add(
                         MenuComment(
@@ -748,6 +877,8 @@ def seed_database() -> None:
                 menu = session.scalar(select(Menu).where(Menu.name == menu_row["name"]))
                 if menu is None:
                     continue
+                _sync_saved_menu_metadata(menu, menu_row)
+                _replace_saved_menu_items(session, menu, menu_row)
                 for comment_row in menu_row["comments"]:
                     session.add(
                         MenuComment(
@@ -775,6 +906,8 @@ def seed_database() -> None:
                 menu = session.scalar(select(Menu).where(Menu.name == menu_row["name"]))
                 if menu is None:
                     continue
+                _sync_saved_menu_metadata(menu, menu_row)
+                _replace_saved_menu_items(session, menu, menu_row)
                 for comment_row in menu_row["comments"]:
                     existing_comment = session.scalar(
                         select(MenuComment).where(

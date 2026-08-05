@@ -29,13 +29,13 @@
                     <StatusPill Status="@Menu.Analysis.OverallStatus" Label="@Menu.Analysis.OverallStatus" />
                     @if (IsAdmin)
                     {
-                        <button type="button" class="@(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Review</button>
-                        <button type="button" class="@(MenuDetailsTab == ReviewTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(ReviewTab)">Summary</button>
+                        <button type="button" class="@($"{(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")} compact-action")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Review</button>
+                        <button type="button" class="@($"{(MenuDetailsTab == ReviewTab ? "button" : "ghost-button")} compact-action")" @onclick="() => SetMenuDetailsTab(ReviewTab)">Summary</button>
                     }
                     else
                     {
-                        <button type="button" class="secondary-button" @onclick="OpenAsDraft">Use as starting point</button>
-                        <button type="button" class="@(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Comments</button>
+                        <button type="button" class="secondary-button compact-action" @onclick="OpenAsDraft">Use as starting point</button>
+                        <button type="button" class="@($"{(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")} compact-action")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Comments</button>
                     }
                 </div>
             </div>
@@ -145,13 +145,13 @@
                         <h3 style="margin-bottom: 6px">Review workspace</h3>
                         <p class="muted" style="margin: 0">@ReviewWorkspaceLead</p>
                     </div>
-                    <div class="hero-actions">
-                        <button type="button" class="ghost-button" @onclick="SelectGeneralMenuTarget">Overall menu comment</button>
+                    <div class="hero-actions review-toolbar-actions">
+                        <button type="button" class="ghost-button compact-action" @onclick="SelectGeneralMenuTarget">Overall menu comment</button>
                         @if (IsAdmin)
                         {
-                            <button type="button" class="button" @onclick="FinishReviewAndSend">Finish review and send</button>
+                            <button type="button" class="button compact-action" @onclick="FinishReviewAndSend">Send review</button>
                         }
-                        <span class="status-badge brand">@OpenCommentCount open</span>
+                        <span class="muted small review-open-count">@OpenCommentCount open comment@(OpenCommentCount == 1 ? "" : "s")</span>
                     </div>
                 </div>
 
@@ -347,7 +347,7 @@
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">Review support</h3>
-                            <p class="muted" style="margin: 0">Use these after scanning the board: summarize provider-facing comments and turn rule-based flags into comments.</p>
+                            <p class="muted" style="margin: 0">Use these after scanning the board: summarize provider-facing comments and convert flagged issues into comments.</p>
                         </div>
                     </div>
 
@@ -377,7 +377,7 @@
                                     <h4>Comment summary for email</h4>
                                     <p class="muted small">Generate a provider-facing summary grouped by menu item, component, or overall menu target.</p>
                                 </div>
-                                <div class="hero-actions">
+                                <div class="comment-summary-actions">
                                     <button type="button" class="ghost-button" @onclick="ToggleMenuCommentSummary">
                                         @(ShowMenuCommentSummary ? "Hide summary" : "Generate summary")
                                     </button>
@@ -408,7 +408,7 @@
                         <div class="review-attention-panel">
                             <div class="section-header compact-header">
                                 <div>
-                                    <h4>System checks needing attention</h4>
+                                    <h4>Menu checks needing attention</h4>
                                     <p class="muted small">Flags from nutrition results, missing meal components, and repeated recipes.</p>
                                 </div>
                                 <span class="status-badge brand">@ReviewAttentionItems.Count() item@(ReviewAttentionItems.Count() == 1 ? "" : "s")</span>

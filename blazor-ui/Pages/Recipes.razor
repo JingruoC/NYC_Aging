@@ -10,10 +10,6 @@
                 <h2 style="margin-bottom: 6px">Approved recipe registry</h2>
                 <p class="muted" style="margin: 0">Search recipes by name, ingredient list, tag, meal type, and category.</p>
             </div>
-            <div class="hero-actions">
-                <span class="status-badge">@FilteredRecipesList.Count() result@(FilteredRecipesList.Count() == 1 ? "" : "s")</span>
-                <span class="status-badge good">@ApprovedCount approved</span>
-            </div>
         </div>
 
         <div class="recipes-layout">
@@ -96,9 +92,14 @@
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">@RecipeViewTitle</h3>
+                            <p class="muted small" style="margin: 0">
+                                Showing @FilteredRecipesList.Count() matching recipe@(FilteredRecipesList.Count() == 1 ? "" : "s")
+                                after filters. @ApprovedCount approved recipes are in the catalog.
+                            </p>
                         </div>
-                        <div class="results-toolbar">
-                            <span class="status-badge">@StatusLabel</span>
+                        <div class="results-toolbar recipe-results-toolbar">
+                            <span class="muted small">Status: @StatusLabel</span>
+                            <span class="muted small">Show</span>
                             <button type="button" class="@PageSizeClass(25)" @onclick="() => SetVisibleRecipeCount(25)">25</button>
                             <button type="button" class="@PageSizeClass(50)" @onclick="() => SetVisibleRecipeCount(50)">50</button>
                             <button type="button" class="@PageSizeClass(int.MaxValue)" @onclick="() => SetVisibleRecipeCount(int.MaxValue)">All</button>
