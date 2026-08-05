@@ -24,19 +24,19 @@
                 <div class="filter-group">
                     <div class="small muted">View</div>
                     <div class="toggle-row">
-                        <button type="button" class="@(RecipeViewMode == RecommendedMode ? "button" : "ghost-button")" @onclick="() => SetRecipeViewMode(RecommendedMode)">Recommended</button>
-                        <button type="button" class="@(RecipeViewMode == BreakfastMode ? "button" : "ghost-button")" @onclick="() => SetRecipeViewMode(BreakfastMode)">Breakfast</button>
-                        <button type="button" class="@(RecipeViewMode == LunchMode ? "button" : "ghost-button")" @onclick="() => SetRecipeViewMode(LunchMode)">Lunch</button>
-                        <button type="button" class="@(RecipeViewMode == DinnerMode ? "button" : "ghost-button")" @onclick="() => SetRecipeViewMode(DinnerMode)">Dinner</button>
-                        <button type="button" class="@(RecipeViewMode == AllMode ? "button" : "ghost-button")" @onclick="() => SetRecipeViewMode(AllMode)">All</button>
+                        <button type="button" class="@FilterToggleClass(RecipeViewMode == RecommendedMode)" @onclick="() => SetRecipeViewMode(RecommendedMode)">Recommended</button>
+                        <button type="button" class="@FilterToggleClass(RecipeViewMode == BreakfastMode)" @onclick="() => SetRecipeViewMode(BreakfastMode)">Breakfast</button>
+                        <button type="button" class="@FilterToggleClass(RecipeViewMode == LunchMode)" @onclick="() => SetRecipeViewMode(LunchMode)">Lunch</button>
+                        <button type="button" class="@FilterToggleClass(RecipeViewMode == DinnerMode)" @onclick="() => SetRecipeViewMode(DinnerMode)">Dinner</button>
+                        <button type="button" class="@FilterToggleClass(RecipeViewMode == AllMode)" @onclick="() => SetRecipeViewMode(AllMode)">All</button>
                     </div>
                 </div>
                 <div class="filter-group">
                     <div class="small muted">Status</div>
                     <div class="toggle-row">
-                        <button type="button" class="@(StatusMode == AllStatusMode ? "button" : "ghost-button")" @onclick="() => SetStatusMode(AllStatusMode)">All</button>
-                        <button type="button" class="@(StatusMode == ApprovedStatusMode ? "button" : "ghost-button")" @onclick="() => SetStatusMode(ApprovedStatusMode)">Approved</button>
-                        <button type="button" class="@(StatusMode == DraftStatusMode ? "button" : "ghost-button")" @onclick="() => SetStatusMode(DraftStatusMode)">Pending review</button>
+                        <button type="button" class="@FilterToggleClass(StatusMode == AllStatusMode)" @onclick="() => SetStatusMode(AllStatusMode)">All</button>
+                        <button type="button" class="@FilterToggleClass(StatusMode == ApprovedStatusMode)" @onclick="() => SetStatusMode(ApprovedStatusMode)">Approved</button>
+                        <button type="button" class="@FilterToggleClass(StatusMode == DraftStatusMode)" @onclick="() => SetStatusMode(DraftStatusMode)">Pending review</button>
                     </div>
                 </div>
                 <div class="filter-group">
@@ -59,20 +59,20 @@
                 <div class="filter-group">
                     <div class="small muted">Category</div>
                     <div class="filter-chip-grid">
-                        <button type="button" class="@(CategoryMode == AllCategoriesMode ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(AllCategoriesMode)">All</button>
-                        <button type="button" class="@(CategoryMode == EntreeCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(EntreeCategory)">Entree</button>
-                        <button type="button" class="@(CategoryMode == SideCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(SideCategory)">Side</button>
-                        <button type="button" class="@(CategoryMode == GrainCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(GrainCategory)">Grain</button>
-                        <button type="button" class="@(CategoryMode == FruitCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(FruitCategory)">Fruit</button>
-                        <button type="button" class="@(CategoryMode == VegetableCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(VegetableCategory)">Vegetable</button>
-                        <button type="button" class="@(CategoryMode == MilkCategory ? "button" : "ghost-button")" @onclick="() => SetCategoryMode(MilkCategory)">Milk</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == AllCategoriesMode)" @onclick="() => SetCategoryMode(AllCategoriesMode)">All</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == EntreeCategory)" @onclick="() => SetCategoryMode(EntreeCategory)">Entree</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == SideCategory)" @onclick="() => SetCategoryMode(SideCategory)">Side</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == GrainCategory)" @onclick="() => SetCategoryMode(GrainCategory)">Grain</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == FruitCategory)" @onclick="() => SetCategoryMode(FruitCategory)">Fruit</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == VegetableCategory)" @onclick="() => SetCategoryMode(VegetableCategory)">Vegetable</button>
+                        <button type="button" class="@FilterToggleClass(CategoryMode == MilkCategory)" @onclick="() => SetCategoryMode(MilkCategory)">Milk</button>
                     </div>
                 </div>
                 <div class="filter-group">
                     <div class="small muted">Legacy shortcuts</div>
                     <div class="toggle-row">
-                        <button type="button" class="@(FavoritesOnly ? "button" : "ghost-button")" @onclick="ToggleFavoritesOnly">My Favorites</button>
-                        <button type="button" class="@(ShowDead ? "button" : "ghost-button")" @onclick="ToggleShowDead">Show Dead</button>
+                        <button type="button" class="@FilterToggleClass(FavoritesOnly)" @onclick="ToggleFavoritesOnly">My Favorites</button>
+                        <button type="button" class="@FilterToggleClass(ShowDead)" @onclick="ToggleShowDead">Show Dead</button>
                     </div>
                 </div>
                 <div class="filter-group">
@@ -94,12 +94,11 @@
                             <h3 style="margin-bottom: 6px">@RecipeViewTitle</h3>
                             <p class="muted small" style="margin: 0">
                                 Showing @FilteredRecipesList.Count() matching recipe@(FilteredRecipesList.Count() == 1 ? "" : "s")
-                                after filters. @ApprovedCount approved recipes are in the catalog.
+                                after filters. @ApprovedCount approved recipes are in the catalog. Status: @StatusLabel.
                             </p>
                         </div>
                         <div class="results-toolbar recipe-results-toolbar">
-                            <span class="muted small">Status: @StatusLabel</span>
-                            <span class="muted small">Show</span>
+                            <span class="muted small">Show rows</span>
                             <button type="button" class="@PageSizeClass(25)" @onclick="() => SetVisibleRecipeCount(25)">25</button>
                             <button type="button" class="@PageSizeClass(50)" @onclick="() => SetVisibleRecipeCount(50)">50</button>
                             <button type="button" class="@PageSizeClass(int.MaxValue)" @onclick="() => SetVisibleRecipeCount(int.MaxValue)">All</button>
@@ -107,50 +106,67 @@
                     </div>
 
                     <div class="recipes-results-scroll">
-                    <div class="table-list">
-                        @foreach (var recipe in VisibleRecipes)
-                        {
-                            <div class="table-row recipe-table-row">
-                                <div class="table-main">
-                                    <div class="table-title-row">
-                                        <span class="status-badge">#@recipe.RecipeId</span>
-                                        <strong>@recipe.RecipeName</strong>
-                                        <span class="status-badge @(recipe.IsApproved ? "good" : "warn")">@ApprovalLabel(recipe)</span>
-                                    </div>
-                                    <div class="muted small">@recipe.MealType · @recipe.Category · @recipe.ServingSize</div>
-                                    <div class="muted small">Contributed by @(recipe.ContributedBy ?? "N/A") · Created on @recipe.CreatedOn?.ToString("MMM d, yyyy")</div>
-                                    <div class="tag-list">
-                                        @if (recipe.IsFavorite)
-                                        {
-                                            <span class="tag-chip">Favorite</span>
-                                        }
-                                        @foreach (var tag in recipe.Tags.Concat(recipe.NutrientClaims).Distinct().Take(4))
-                                        {
-                                            <span class="tag-chip">@tag</span>
-                                        }
-                                    </div>
-                                </div>
-                                <div class="table-metric">@recipe.Calories kcal</div>
-                                <div class="table-metric">@recipe.SodiumMg mg</div>
-                                <div class="table-metric">@recipe.ProteinG g</div>
-                                <div class="table-metric">@recipe.FiberG g</div>
-                                <div class="table-metric">@recipe.FatG g</div>
-                                <div class="table-metric">
-                                    <div class="hero-actions" style="justify-content: flex-end">
-                                        <a class="ghost-button tiny-button" href="@($"/recipes/{recipe.RecipeId}")">View</a>
-                                        @if (AppMode.IsAdmin && !recipe.IsApproved)
-                                        {
-                                            <a class="button tiny-button" href="@($"/recipes/{recipe.RecipeId}/review")">Review</a>
-                                        }
-                                        else
-                                        {
-                                            <a class="button tiny-button" href="@($"/recipes/{recipe.RecipeId}/edit")">Edit</a>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
+                        <div class="admin-table-wrap recipe-registry-wrap">
+                            <table class="admin-table recipe-registry-table">
+                                <thead>
+                                    <tr>
+                                        <th>Recipe</th>
+                                        <th>Calories</th>
+                                        <th>Sodium</th>
+                                        <th>Protein</th>
+                                        <th>Fiber</th>
+                                        <th>Fat</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var recipe in VisibleRecipes)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="recipe-registry-name">
+                                                    <div class="table-title-row">
+                                                        <span class="status-badge">#@recipe.RecipeId</span>
+                                                        <strong>@recipe.RecipeName</strong>
+                                                        <span class="status-badge @(recipe.IsApproved ? "good" : "warn")">@ApprovalLabel(recipe)</span>
+                                                    </div>
+                                                    <div class="muted small">@recipe.MealType · @recipe.Category · @recipe.ServingSize</div>
+                                                    <div class="muted small">Contributed by @(recipe.ContributedBy ?? "N/A") · Created on @recipe.CreatedOn?.ToString("MMM d, yyyy")</div>
+                                                    <div class="tag-list compact-tags">
+                                                        @if (recipe.IsFavorite)
+                                                        {
+                                                            <span class="tag-chip">Favorite</span>
+                                                        }
+                                                        @foreach (var tag in recipe.Tags.Concat(recipe.NutrientClaims).Distinct().Take(4))
+                                                        {
+                                                            <span class="tag-chip">@tag</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td><strong>@recipe.Calories</strong> kcal</td>
+                                            <td><strong>@recipe.SodiumMg</strong> mg</td>
+                                            <td><strong>@recipe.ProteinG</strong> g</td>
+                                            <td><strong>@recipe.FiberG</strong> g</td>
+                                            <td><strong>@recipe.FatG</strong> g</td>
+                                            <td>
+                                                <div class="table-action-stack">
+                                                    <a class="table-action-link" href="@($"/recipes/{recipe.RecipeId}")">Open</a>
+                                                    @if (AppMode.IsAdmin && !recipe.IsApproved)
+                                                    {
+                                                        <a class="table-action-link primary" href="@($"/recipes/{recipe.RecipeId}/review")">Review</a>
+                                                    }
+                                                    else if (AppMode.IsAdmin)
+                                                    {
+                                                        <a class="table-action-link primary" href="@($"/recipes/{recipe.RecipeId}/edit")">Edit</a>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -310,7 +326,9 @@
 
     private void ResetVisibleRecipeCount() => VisibleRecipeCount = 25;
 
-    private string PageSizeClass(int count) => VisibleRecipeCount == count ? "button tiny-button" : "secondary-button tiny-button";
+    private string PageSizeClass(int count) => VisibleRecipeCount == count ? "active" : string.Empty;
+
+    private static string FilterToggleClass(bool isActive) => isActive ? "filter-toggle active" : "filter-toggle";
 
     private int Rank(RecipeDto recipe)
     {
