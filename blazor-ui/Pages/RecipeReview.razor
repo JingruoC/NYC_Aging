@@ -423,7 +423,7 @@
                             </label>
                             <label>
                                 <div class="small muted">Comment to provider</div>
-                                <InputTextArea class="input comment-textarea" @bind-Value="NewCommentBody" />
+                                <textarea class="input comment-textarea" value="@NewCommentBody" @oninput="HandleCommentBodyInput"></textarea>
                             </label>
                             <label>
                                 <div class="small muted">Visibility</div>
@@ -894,6 +894,11 @@
     {
         NewCommentBody = string.Empty;
         ActionMessage = null;
+    }
+
+    private void HandleCommentBodyInput(ChangeEventArgs eventArgs)
+    {
+        NewCommentBody = eventArgs.Value?.ToString() ?? string.Empty;
     }
 
     private void ToggleRecipeCommentSummary()

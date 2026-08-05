@@ -327,7 +327,7 @@
                     <div class="comment-entry">
                         <label>
                             <div class="small muted">@CommentInputLabel</div>
-                            <InputTextArea class="input comment-textarea" @bind-Value="NewCommentBody" />
+                            <textarea class="input comment-textarea" value="@NewCommentBody" @oninput="HandleCommentBodyInput"></textarea>
                         </label>
                         <div class="hero-actions">
                             <button type="button" class="button" @onclick="AddReviewComment">Add comment</button>
@@ -831,6 +831,11 @@
     {
         NewCommentBody = string.Empty;
         CommentMessage = null;
+    }
+
+    private void HandleCommentBodyInput(ChangeEventArgs eventArgs)
+    {
+        NewCommentBody = eventArgs.Value?.ToString() ?? string.Empty;
     }
 
     private void ToggleMenuCommentSummary()

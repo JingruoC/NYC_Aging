@@ -778,10 +778,11 @@
         AllRecipes.Where(recipe => recipe.Matches(SearchText))
                   .Where(MatchesRecipeView)
                   .Where(MatchesLegacyRecipeFilter)
+                  .Where(MatchesSelectedComponent)
                   .Where(recipe => !FavoritesOnly || recipe.IsFavorite)
                   .Where(recipe => RecipeGalleryMode == AllGalleryMode || RecipeGalleryMode == RecommendedGalleryMode || recipe.MealType.Equals(RecipeGalleryMode, StringComparison.OrdinalIgnoreCase))
                   .OrderBy(recipe => RecommendedItems.Any(item => item.Recipe.RecipeId == recipe.RecipeId) ? 0 : 1)
-                  .ThenBy(recipe => SelectedCell is not null && PreferredComponentsForRecipe(recipe).Contains(SelectedCell.Value.ComponentKey) ? 0 : 1)
+                  .ThenBy(recipe => SelectedCell is not null && CanPlaceRecipeInComponent(recipe, SelectedCell.Value.ComponentKey) ? 0 : 1)
                   .ThenBy(recipe => recipe.RecipeName);
 
     private IEnumerable<RecipeDto> VisibleGalleryRecipes => GalleryRecipes.Take(GalleryVisibleCount);
@@ -1269,7 +1270,14 @@
                 return;
             }
 
-            CurrentSchedule[SelectedCell.Value.DayIndex][SelectedCell.Value.MealSlot][SelectedCell.Value.ComponentKey] = recipe;
+            var componentKey = NormalizeComponentKey(SelectedCell.Value.ComponentKey);
+            if (!CanPlaceRecipeInComponent(recipe, componentKey))
+            {
+                PlannerMessage = $"{recipe.RecipeName} does not match the selected {ComponentLabel(componentKey).ToLowerInvariant()} component.";
+                return;
+            }
+
+            CurrentSchedule[SelectedCell.Value.DayIndex][SelectedCell.Value.MealSlot][componentKey] = recipe;
             SelectedCell = null;
             LastPlacedRecipe = recipe;
             PlannerSidebarTab = PlannerInsightsTab;
@@ -1511,13 +1519,35 @@
         var category = recipe.Category.ToLowerInvariant();
         return category switch
         {
-            "entree" => ["entree", "alternate", "appetizer"],
+            "entree" => ["entree", "alternate"],
             "fruit" => ["fruit", "juice-dessert", "alternate"],
-            "vegetable" or "side" => ["vegetable", "appetizer", "alternate", "condiments"],
-            "grain" => ["grains", "alternate", "entree"],
-            "milk" or "dairy" => ["dairy", "condiments", "alternate"],
+            "vegetable" or "side" => ["vegetable", "appetizer", "alternate"],
+            "grain" => ["grains", "alternate"],
+            "milk" or "dairy" => ["dairy", "alternate"],
+            "condiments" => ["condiments"],
+            "juice-dessert" => ["juice-dessert", "alternate"],
             _ => ["entree", "vegetable", "fruit", "grains", "dairy", "alternate", "condiments", "juice-dessert"]
         };
+    }
+
+    private bool MatchesSelectedComponent(RecipeDto recipe)
+    {
+        return SelectedCell is null || CanPlaceRecipeInComponent(recipe, SelectedCell.Value.ComponentKey);
+    }
+
+    private static bool CanPlaceRecipeInComponent(RecipeDto recipe, string componentKey)
+    {
+        var normalizedComponent = NormalizeComponentKey(componentKey);
+        return PreferredComponentsForRecipe(recipe).Contains(normalizedComponent, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string ComponentLabel(string componentKey)
+    {
+        var normalizedComponent = NormalizeComponentKey(componentKey);
+        return BaseMealComponents
+            .Where(component => component.Key == normalizedComponent)
+            .Select(component => component.Label)
+            .FirstOrDefault() ?? componentKey;
     }
 
     private static int ComponentOrder(string componentKey)
