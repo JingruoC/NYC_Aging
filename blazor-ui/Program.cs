@@ -18,7 +18,10 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-    app.UseHttpsRedirection();
+    if (builder.Configuration.GetValue("EnableHttpsRedirect", false))
+    {
+        app.UseHttpsRedirection();
+    }
 }
 
 app.UseStaticFiles();

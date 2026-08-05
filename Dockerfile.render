@@ -1,0 +1,37 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS blazor-build
+
+WORKDIR /src
+
+COPY blazor-ui/NycAging.Web.csproj blazor-ui/
+RUN dotnet restore blazor-ui/NycAging.Web.csproj
+
+COPY blazor-ui/ blazor-ui/
+RUN dotnet publish blazor-ui/NycAging.Web.csproj -c Release -o /app/blazor /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN python3 -m venv /app/backend/.venv \
+    && /app/backend/.venv/bin/pip install --no-cache-dir -r /app/backend/requirements.txt
+
+COPY backend /app/backend
+COPY --from=blazor-build /app/blazor /app/blazor
+COPY scripts/start-render.sh /app/start-render.sh
+
+RUN chmod +x /app/start-render.sh
+
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV AUTO_SEED_DB=true
+ENV DATABASE_URL=sqlite:////tmp/simple-servings.db
+ENV PYTHONPATH=/app/backend
+ENV PythonApi__BaseUrl=http://127.0.0.1:8000
+
+EXPOSE 10000
+
+CMD ["/app/start-render.sh"]

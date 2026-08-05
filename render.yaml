@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: simple-servings-prototype
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: AUTO_SEED_DB
+        value: "true"
+      - key: DATABASE_URL
+        value: sqlite:////tmp/simple-servings.db
+      - key: PythonApi__BaseUrl
+        value: http://127.0.0.1:8000

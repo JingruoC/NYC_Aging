@@ -76,6 +76,29 @@ Then open:
 
 Docker Compose runs the current Blazor UI, not the archived Next.js prototype.
 
+## Hosted Interactive Prototype
+
+The simplest hosted prototype path is Render Blueprint deployment using `render.yaml`.
+
+This runs a single Docker web service:
+
+- Blazor Server is the public app.
+- FastAPI runs inside the same container on `127.0.0.1:8000`.
+- SQLite stores seeded demo data at `/tmp/simple-servings.db`.
+
+Steps:
+
+1. Push this repository to GitHub.
+2. In Render, choose **New > Blueprint**.
+3. Connect the GitHub repository.
+4. Render will detect `render.yaml` and create `simple-servings-prototype`.
+5. Open the generated `onrender.com` URL.
+
+Prototype hosting limitation:
+
+- The Render prototype uses SQLite on ephemeral container storage. It is good for click-through demos, but data can reset on redeploy or service restart.
+- For a longer-running pilot, use the Docker Compose architecture or a managed PostgreSQL database.
+
 ## Manual Development Run
 
 Start the backend:
