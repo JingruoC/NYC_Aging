@@ -34,7 +34,7 @@
         <div class="report-form">
             <label>
                 <div class="small muted">Search by MenuID or Menu Name</div>
-                <InputText class="input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Menu ID or name" />
+                <input class="input" value="@SearchText" @oninput="OnSearchChanged" placeholder="Menu ID or name" />
             </label>
             <label>
                 <div class="small muted">Menu Status</div>
@@ -232,6 +232,12 @@
             .Where(menu => ProgramTypeFilter == AllMode || (menu.ProgramType ?? string.Empty).Equals(ProgramTypeFilter, StringComparison.OrdinalIgnoreCase))
             .Where(menu => MealTypeFilter == AllMode || (menu.MealType ?? string.Empty).Equals(MealTypeFilter, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(menu => menu.CreatedAt);
+
+    private void OnSearchChanged(ChangeEventArgs args)
+    {
+        SearchText = args.Value?.ToString() ?? string.Empty;
+        Message = null;
+    }
 
     private void ResetFilters()
     {

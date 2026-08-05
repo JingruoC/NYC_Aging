@@ -1,6 +1,6 @@
 @page "/menus/favorites"
 @inject PythonApiClient Api
-@inject NavigationManager Navigation
+@inject AppModeService AppMode
 
 <div class="grid" style="gap: 18px">
     <section class="section">
@@ -70,15 +70,19 @@
 </div>
 
 @code {
+    [CascadingParameter] public AppRole CurrentRole { get; set; }
+
     private List<MenuSummaryDto> Menus { get; set; } = [];
+    private bool IsProvider => CurrentRole == AppRole.Provider;
 
     private IEnumerable<MenuSummaryDto> FavoriteMenus => Menus
         .Where(menu => menu.IsFavorite)
+        .Where(menu => !IsProvider || AppMode.CanProviderSeeMenu(menu))
         .OrderByDescending(menu => menu.CreatedAt);
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        Navigation.NavigateTo("/menus/list", replace: true);
+        Menus = await Api.GetMenusAsync();
     }
 
     private async Task ToggleFavorite(MenuSummaryDto menu)

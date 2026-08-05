@@ -47,9 +47,12 @@
                     }
                 </InputSelect>
             </label>
-            <div>
+        </div>
+
+        <div class="planner-cycle-row">
+            <div class="planner-control-panel">
                 <div class="small muted">Week in cycle</div>
-                <div class="segmented-control">
+                <div class="segmented-control cycle-tabs">
                     @for (var week = 1; week <= 6; week++)
                     {
                         var selectedWeek = week;
@@ -57,7 +60,7 @@
                     }
                 </div>
             </div>
-            <div>
+            <div class="planner-control-panel service-pattern-panel">
                 <div class="small muted">Service pattern</div>
                 <div class="segmented-control compact">
                     <button type="button" class="@(DaysPerWeek == 5 ? "active" : "")" @onclick="() => SetDaysPerWeek(5)">5-day</button>

@@ -353,8 +353,9 @@ def create_menu(payload: MenuCreate):
             )
             created_items.append(menu_item)
             db.add(menu_item)
-        db.flush()
+        db.commit()
         db.refresh(menu)
+        created_items = db.scalars(select(MenuItem).where(MenuItem.menu_id == menu.id).order_by(MenuItem.position.asc())).all()
         items = [
             MenuItemOut(
                 recipe_id=item.recipe_id,

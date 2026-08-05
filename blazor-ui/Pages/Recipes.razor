@@ -24,7 +24,7 @@
                         <h3>Filters</h3>
                     </div>
                 </div>
-                <InputText class="input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search by recipe name, ingredient, tag, or meal type" />
+                <input class="input" value="@SearchText" @oninput="OnSearchChanged" placeholder="Search by recipe name, ingredient, tag, or meal type" />
                 <div class="filter-group">
                     <div class="small muted">View</div>
                     <div class="toggle-row">
@@ -275,6 +275,12 @@
     private void SetRecipeViewMode(string mode)
     {
         RecipeViewMode = mode;
+        ResetVisibleRecipeCount();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs args)
+    {
+        SearchText = args.Value?.ToString() ?? string.Empty;
         ResetVisibleRecipeCount();
     }
 

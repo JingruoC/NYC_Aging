@@ -85,12 +85,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (AppMode.IsAdmin)
-        {
-            Navigation.NavigateTo("/menus/list", replace: true);
-            return;
-        }
-
         Menus = await Api.GetMenusAsync();
     }
 

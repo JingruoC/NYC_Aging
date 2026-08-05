@@ -432,7 +432,7 @@
                                     <option value="Internal">Internal only</option>
                                 </InputSelect>
                             </label>
-                            <div class="hero-actions">
+                            <div class="comment-entry-actions">
                                 <button type="button" class="button" @onclick="AddReviewComment">Add comment</button>
                                 <button type="button" class="ghost-button" @onclick="ClearCommentDraft">Clear</button>
                             </div>
@@ -448,7 +448,7 @@
                                     <h4>Comment summary for email</h4>
                                     <p class="muted small">Generate a provider-facing summary grouped by the recipe section or overall recipe target.</p>
                                 </div>
-                                <div class="hero-actions">
+                                <div class="comment-summary-actions">
                                     <button type="button" class="ghost-button" @onclick="ToggleRecipeCommentSummary">
                                         @(ShowRecipeCommentSummary ? "Hide summary" : "Generate summary")
                                     </button>

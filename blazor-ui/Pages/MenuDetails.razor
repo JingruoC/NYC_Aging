@@ -31,7 +31,6 @@
                     {
                         <button type="button" class="@(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Review</button>
                         <button type="button" class="@(MenuDetailsTab == ReviewTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(ReviewTab)">Summary</button>
-                        <button type="button" class="@(MenuDetailsTab == InsightsTab ? "button" : "ghost-button")" @onclick="() => SetMenuDetailsTab(InsightsTab)">System checks</button>
                     }
                     else
                     {
@@ -520,83 +519,6 @@
                 </div>
             </section>
         }
-        else
-        {
-            <div class="section">
-                @if (Menu is not null)
-                {
-                    <NutritionPanel Totals="@Menu.Analysis.Totals" Statuses="@Menu.Analysis.Statuses" MealRequirements="@Menu.Analysis.MealRequirements" OverallStatus="@Menu.Analysis.OverallStatus" />
-                }
-
-                <h3 style="margin-top: 0">Rule-based review checks</h3>
-                <p class="muted" style="margin-top: -8px">Nutrition, revision, and historical comparison checks based on existing recipes and saved menu data.</p>
-
-                <div class="section-inner">
-                    <h4>Revision suggestions</h4>
-                    @foreach (var group in Menu?.Revisions ?? new Dictionary<string, List<RecommendationItemDto>>())
-                    {
-                        <div style="margin-bottom: 12px">
-                            <div class="status-badge brand" style="margin-bottom: 8px">@group.Key</div>
-                            @foreach (var item in group.Value)
-                            {
-                                <div class="status-row">
-                                    <div>
-                                        <strong>@item.Recipe.RecipeName</strong>
-                                        <div class="muted small">
-                                            <span class="meal-badge @MealBadgeClassFromMealType(item.Recipe.MealType)">@MealShortNameFromMealType(item.Recipe.MealType)</span>
-                                            <span style="margin-left: 6px">@item.Recipe.MealType · @item.Recipe.Category</span>
-                                        </div>
-                                        <div class="muted small">@string.Join(" · ", item.Reasons)</div>
-                                    </div>
-                                    <strong>@item.Score</strong>
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <div class="section-inner">
-                    <h4>Similar historical menus</h4>
-                    @foreach (var item in Menu?.SimilarMenus ?? Enumerable.Empty<SimilarMenuDto>())
-                    {
-                        <div class="status-row">
-                            <div>
-                                <strong>@item.Name</strong>
-                                <div class="muted small">@item.ServiceDate.ToString("MMM d, yyyy")</div>
-                            </div>
-                            <span class="status-badge @(item.PassesNutrition ? "good" : "warn")">@item.Similarity</span>
-                        </div>
-                    }
-                </div>
-
-                <div class="section-inner">
-                    <h4>Menu status history</h4>
-                    <div class="status-stack">
-                        <div class="status-row">
-                            <div>
-                                <strong>@(Menu?.Menu.Status ?? "Loading")</strong>
-                                <div class="muted small">Current status</div>
-                            </div>
-                            <span class="status-badge brand">@Menu?.Menu.StatusDate?.ToString("MMM d, yyyy")</span>
-                        </div>
-                        <div class="status-row">
-                            <div>
-                                <strong>Created</strong>
-                                <div class="muted small">@Menu?.Menu.CreatedAt.ToString("MMM d, yyyy h:mm tt")</div>
-                            </div>
-                            <span class="status-badge brand">Logged</span>
-                        </div>
-                        <div class="status-row">
-                            <div>
-                                <strong>Submitted to</strong>
-                                <div class="muted small">@(Menu?.Menu.SubmittedTo ?? "Not submitted")</div>
-                            </div>
-                            <span class="status-badge brand">Submission</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
     }
 </div>
 
@@ -612,7 +534,6 @@
     private DotNetObjectReference<MenuDetails>? _dotNetRef;
     private const string ReviewTab = "review";
     private const string CommentsTab = "comments";
-    private const string InsightsTab = "insights";
     private const string ThisMenuPerspective = "this-menu";
     private const string SameProviderPerspective = "same-provider";
     private const string SameProviderCyclePerspective = "same-provider-cycle";
@@ -827,7 +748,8 @@
     private void GoToMenuBuilder() => Navigation.NavigateTo("/menus/new");
 
     private bool CanUseMenuDetailsTab(string tab) =>
-        IsAdmin || tab.Equals(CommentsTab, StringComparison.OrdinalIgnoreCase);
+        tab.Equals(CommentsTab, StringComparison.OrdinalIgnoreCase)
+        || (IsAdmin && tab.Equals(ReviewTab, StringComparison.OrdinalIgnoreCase));
 
     private void SetMenuDetailsTab(string tab)
     {
@@ -1821,9 +1743,9 @@
         {
             SetMenuDetailsTab(CommentsTab);
         }
-        else if (requestedTab?.Equals(InsightsTab, StringComparison.OrdinalIgnoreCase) == true)
+        else if (requestedTab?.Equals("insights", StringComparison.OrdinalIgnoreCase) == true)
         {
-            SetMenuDetailsTab(InsightsTab);
+            SetMenuDetailsTab(IsAdmin ? ReviewTab : CommentsTab);
         }
         else if (requestedTab?.Equals(ReviewTab, StringComparison.OrdinalIgnoreCase) == true)
         {

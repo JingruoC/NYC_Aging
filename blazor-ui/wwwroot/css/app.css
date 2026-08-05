@@ -186,8 +186,34 @@ a { color: inherit; text-decoration: none; }
 }
 .planner-command-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.1fr) minmax(150px, 0.8fr) minmax(210px, 1fr) minmax(260px, 1.3fr) minmax(130px, 0.7fr);
+  grid-template-columns: minmax(170px, 1.1fr) minmax(150px, 0.8fr) minmax(210px, 1fr);
   align-items: end;
+}
+.planner-cycle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.planner-control-panel {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(84, 64, 33, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.72);
+}
+.service-pattern-panel {
+  min-width: 154px;
+}
+.segmented-control.cycle-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(78px, 1fr));
+  gap: 7px;
+}
+.segmented-control.cycle-tabs button {
+  width: 100%;
 }
 .compact-input { min-height: 42px; padding: 10px 12px; }
 .gallery-filter-grid {
@@ -475,6 +501,24 @@ a { color: inherit; text-decoration: none; }
 .recipes-main { display: grid; gap: 16px; }
 .filter-group { display: grid; gap: 10px; }
 .filter-chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.recipes-filters .toggle-row,
+.recipes-filters .filter-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+  gap: 8px;
+}
+.recipes-filters .toggle-row button,
+.recipes-filters .filter-chip-grid button,
+.recipes-filters .toggle-row a,
+.recipes-filters .filter-chip-grid a {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 10px;
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+}
 .recipe-category-grid { gap: 10px; }
 .recipe-category-grid .ghost-button {
   min-width: 120px;
@@ -1314,6 +1358,24 @@ button.comment-metric-card {
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
+.comment-entry-actions,
+.comment-summary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.comment-entry-actions button,
+.comment-summary-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  line-height: 1.15;
+  white-space: normal;
+}
+.comment-summary-actions {
+  align-items: start;
+}
 .comment-textarea {
   min-height: 120px;
   resize: vertical;
@@ -1756,7 +1818,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 960px) {
-  .hero-grid, .planner-header, .planner-toolbar, .planner-layout, .planner-command-row, .setup-grid, .setup-options, .planner-sidebar, .planner-hero-grid, .recipe-grid, .recipe-strip, .recipe-submission-layout, .choice-card-grid, .form-grid-two, .form-grid-three, .nutrition-input-grid, .columns, .cols-2, .cols-3, .summary-grid, .nutrition-review-grid, .recipes-layout, .resources-layout, .resources-file-layout, .provider-resource-layout, .reports-layout, .review-comment-layout, .review-perspective-controls, .review-admin-tool-grid, .resources-hero-grid, .resource-detail-grid, .resource-nav-panel, .resource-add-panel, .resource-add-form, .table-row, .todo-row, .menu-table-row, .recipe-table-row, .sample-menu-row, .sample-browser-layout, .planner-gallery-row, .planner-recipe-grid, .recipe-metrics, .report-form, .compact-form, .legacy-tile-grid, .legacy-accordion-grid, .gallery-filter-grid, .swap-row, .sample-mini-calendar, .meal-comparison-grid, .recipe-review-layout, .recipe-review-summary, .recipe-review-content-grid, .recipe-detail-two, .recipe-nutrition-summary, .recipe-review-record-grid, .recipe-review-record-row, .recipe-review-field-row { grid-template-columns: 1fr; }
+  .hero-grid, .planner-header, .planner-toolbar, .planner-layout, .planner-command-row, .planner-cycle-row, .setup-grid, .setup-options, .planner-sidebar, .planner-hero-grid, .recipe-grid, .recipe-strip, .recipe-submission-layout, .choice-card-grid, .form-grid-two, .form-grid-three, .nutrition-input-grid, .columns, .cols-2, .cols-3, .summary-grid, .nutrition-review-grid, .recipes-layout, .resources-layout, .resources-file-layout, .provider-resource-layout, .reports-layout, .review-comment-layout, .review-perspective-controls, .review-admin-tool-grid, .resources-hero-grid, .resource-detail-grid, .resource-nav-panel, .resource-add-panel, .resource-add-form, .table-row, .todo-row, .menu-table-row, .recipe-table-row, .sample-menu-row, .sample-browser-layout, .planner-gallery-row, .planner-recipe-grid, .recipe-metrics, .report-form, .compact-form, .legacy-tile-grid, .legacy-accordion-grid, .gallery-filter-grid, .swap-row, .sample-mini-calendar, .meal-comparison-grid, .recipe-review-layout, .recipe-review-summary, .recipe-review-content-grid, .recipe-detail-two, .recipe-nutrition-summary, .recipe-review-record-grid, .recipe-review-record-row, .recipe-review-field-row { grid-template-columns: 1fr; }
+  .segmented-control.cycle-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .planner-meta { justify-content: flex-start; max-width: none; }
   .topbar { flex-direction: column; align-items: stretch; }
   .topbar-actions { justify-content: flex-start; }
@@ -1774,6 +1837,16 @@ h1, h2, h3, h4, h5, h6 {
   .meal-board-help { margin-left: 0; }
   .meal-label { min-height: 82px; }
   .recipe-card-actions { flex-direction: column; align-items: stretch; }
+}
+
+@media (max-width: 560px) {
+  .segmented-control.cycle-tabs,
+  .recipes-filters .toggle-row,
+  .recipes-filters .filter-chip-grid,
+  .comment-entry-actions,
+  .comment-summary-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 @keyframes dropFlash {
