@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" role="img" aria-labelledby="title desc">
+  <title id="title">Weekly menu calendar</title>
+  <desc id="desc">An orange weekly menu calendar with meal rows.</desc>
+  <rect width="800" height="480" fill="#fff6ec"/>
+  <rect x="70" y="54" width="660" height="372" rx="24" fill="#fff" stroke="#d66a18" stroke-width="8"/>
+  <path d="M70 136h660" stroke="#d66a18" stroke-width="8"/>
+  <g fill="#bd4b00">
+    <rect x="135" y="30" width="30" height="70" rx="12"/>
+    <rect x="635" y="30" width="30" height="70" rx="12"/>
+  </g>
+  <g fill="#f5c79e">
+    <rect x="112" y="172" width="118" height="70" rx="12"/>
+    <rect x="251" y="172" width="118" height="70" rx="12"/>
+    <rect x="390" y="172" width="118" height="70" rx="12"/>
+    <rect x="529" y="172" width="118" height="70" rx="12"/>
+  </g>
+  <g fill="#e9aa72">
+    <rect x="112" y="265" width="118" height="112" rx="12"/>
+    <rect x="251" y="265" width="118" height="112" rx="12"/>
+    <rect x="390" y="265" width="118" height="112" rx="12"/>
+    <rect x="529" y="265" width="118" height="112" rx="12"/>
+  </g>
+</svg>

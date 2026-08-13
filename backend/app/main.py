@@ -4,19 +4,22 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 
 from .db import SessionLocal, ensure_sqlite_schema
-from .models import HistoricalMenu, HistoricalMenuItem, Menu, MenuComment, MenuItem, Recipe, RecipeComment
+from .models import HistoricalMenu, HistoricalMenuItem, HomeUpdate, Menu, MenuComment, MenuItem, Recipe, RecipeAttachment, RecipeComment, RecipeHomeCategorySetting, ResourceFile
+from .recipe_exports import build_nutrition_workbook, build_recipe_submission_workbook
 from .schemas import (
     AnalyticsOut,
     AutocompleteRequest,
     HistoricalMenuDetailOut,
     HistoricalMenuItemOut,
     HistoricalMenuSummaryOut,
+    HomeUpdateCreate,
+    HomeUpdateOut,
     MenuAnalysisOut,
     MenuAnalysisRequest,
     MenuCommentCreate,
@@ -26,10 +29,14 @@ from .schemas import (
     MenuOut,
     MenuSummaryOut,
     RecipeCreate,
+    RecipeAttachmentOut,
     RecipeCommentCreate,
     RecipeCommentOut,
+    RecipeHomeCategorySettingOut,
+    RecipeHomeCategorySettingUpdate,
     RecipeOut,
     RecipeUpdate,
+    ResourceFileOut,
     RevisionRequest,
     SimilarMenusRequest,
 )
@@ -73,9 +80,135 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/resources", response_model=list[ResourceFileOut])
+def list_resource_files():
+    with SessionLocal() as db:
+        resources = db.scalars(
+            select(ResourceFile).order_by(ResourceFile.last_updated.desc(), ResourceFile.title.asc())
+        ).all()
+        return [ResourceFileOut.model_validate(resource) for resource in resources]
+
+
+@app.post("/resources", response_model=ResourceFileOut)
+async def upload_resource_file(
+    title: str = Form(...),
+    resource_type: str = Form(...),
+    description: str = Form(default=""),
+    audience: str = Form(default="Staff + Providers"),
+    last_updated: date | None = Form(default=None),
+    uploaded_by: str = Form(default="NYC Aging Nutrition Unit"),
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Resource files are limited to 20 MB per file")
+    if not content:
+        raise HTTPException(status_code=400, detail="Resource file cannot be empty")
+
+    with SessionLocal() as db:
+        resource = ResourceFile(
+            title=title.strip(),
+            resource_type=resource_type.strip(),
+            description=description.strip(),
+            audience=audience.strip(),
+            last_updated=last_updated or date.today(),
+            uploaded_by=uploaded_by.strip(),
+            file_name=file.filename or "resource-file",
+            content_type=file.content_type or "application/octet-stream",
+            file_size=len(content),
+            content=content,
+        )
+        db.add(resource)
+        db.commit()
+        db.refresh(resource)
+        return ResourceFileOut.model_validate(resource)
+
+
+@app.get("/resources/{resource_id}/file")
+def download_resource_file(resource_id: int, download: bool = Query(default=False)):
+    with SessionLocal() as db:
+        resource = db.get(ResourceFile, resource_id)
+        if resource is None:
+            raise HTTPException(status_code=404, detail="Resource file not found")
+        disposition = "attachment" if download else "inline"
+        safe_name = resource.file_name.replace('"', "")
+        return Response(
+            content=resource.content,
+            media_type=resource.content_type,
+            headers={"Content-Disposition": f'{disposition}; filename="{safe_name}"'},
+        )
+
+
+@app.delete("/resources/{resource_id}", status_code=204)
+def delete_resource_file(resource_id: int):
+    with SessionLocal() as db:
+        resource = db.get(ResourceFile, resource_id)
+        if resource is None:
+            raise HTTPException(status_code=404, detail="Resource file not found")
+        db.delete(resource)
+        db.commit()
+        return Response(status_code=204)
+
+
 @app.get("/", include_in_schema=False)
 def frontend_redirect():
     return RedirectResponse(os.getenv("FRONTEND_URL", "http://127.0.0.1:5050"))
+
+
+@app.get("/home-updates", response_model=list[HomeUpdateOut])
+def list_home_updates():
+    with SessionLocal() as db:
+        return db.scalars(select(HomeUpdate).order_by(HomeUpdate.published_on.desc(), HomeUpdate.id.desc())).all()
+
+
+@app.get("/home-updates/{update_id}", response_model=HomeUpdateOut)
+def get_home_update(update_id: int):
+    with SessionLocal() as db:
+        update = db.get(HomeUpdate, update_id)
+        if update is None:
+            raise HTTPException(status_code=404, detail="Home update not found")
+        return HomeUpdateOut.model_validate(update)
+
+
+@app.post("/home-updates", response_model=HomeUpdateOut)
+def create_home_update(payload: HomeUpdateCreate):
+    with SessionLocal() as db:
+        values = payload.model_dump()
+        values["content"] = (values.get("content") or values["summary"]).strip()
+        update = HomeUpdate(**values)
+        db.add(update)
+        db.commit()
+        db.refresh(update)
+        return HomeUpdateOut.model_validate(update)
+
+
+@app.get("/recipe-home-categories", response_model=list[RecipeHomeCategorySettingOut])
+def list_recipe_home_categories():
+    with SessionLocal() as db:
+        return db.scalars(select(RecipeHomeCategorySetting).order_by(RecipeHomeCategorySetting.category_key)).all()
+
+
+@app.put("/recipe-home-categories/{category_key}", response_model=RecipeHomeCategorySettingOut)
+def update_recipe_home_category(category_key: str, payload: RecipeHomeCategorySettingUpdate):
+    with SessionLocal() as db:
+        setting = db.get(RecipeHomeCategorySetting, category_key)
+        if setting is None:
+            setting = RecipeHomeCategorySetting(
+                category_key=category_key,
+                is_visible=payload.is_visible,
+                display_label=payload.display_label,
+                description=payload.description,
+            )
+            db.add(setting)
+        else:
+            setting.is_visible = payload.is_visible
+            if payload.display_label is not None:
+                setting.display_label = payload.display_label
+            if payload.description is not None:
+                setting.description = payload.description
+        db.commit()
+        db.refresh(setting)
+        return RecipeHomeCategorySettingOut.model_validate(setting)
 
 
 @app.get("/recipes", response_model=list[RecipeOut])
@@ -150,6 +283,86 @@ def create_recipe_comment(recipe_id: int, payload: RecipeCommentCreate):
         return RecipeCommentOut.model_validate(comment)
 
 
+@app.get("/recipes/{recipe_id}/attachments", response_model=list[RecipeAttachmentOut])
+def list_recipe_attachments(recipe_id: int):
+    with SessionLocal() as db:
+        if db.get(Recipe, recipe_id) is None:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        attachments = db.scalars(
+            select(RecipeAttachment)
+            .where(RecipeAttachment.recipe_id == recipe_id)
+            .order_by(RecipeAttachment.uploaded_at.desc(), RecipeAttachment.id.desc())
+        ).all()
+        return [RecipeAttachmentOut.model_validate(attachment) for attachment in attachments]
+
+
+@app.post("/recipes/{recipe_id}/attachments", response_model=RecipeAttachmentOut)
+async def upload_recipe_attachment(
+    recipe_id: int,
+    file_kind: str = Query(default="supporting_document"),
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Recipe attachments are limited to 20 MB per file")
+    with SessionLocal() as db:
+        if db.get(Recipe, recipe_id) is None:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        attachment = RecipeAttachment(
+            recipe_id=recipe_id,
+            file_name=file.filename or "recipe-attachment",
+            content_type=file.content_type or "application/octet-stream",
+            file_kind=file_kind,
+            file_size=len(content),
+            content=content,
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+        return RecipeAttachmentOut.model_validate(attachment)
+
+
+@app.get("/recipes/{recipe_id}/attachments/{attachment_id}")
+def download_recipe_attachment(recipe_id: int, attachment_id: int, download: bool = Query(default=False)):
+    with SessionLocal() as db:
+        attachment = db.get(RecipeAttachment, attachment_id)
+        if attachment is None or attachment.recipe_id != recipe_id:
+            raise HTTPException(status_code=404, detail="Recipe attachment not found")
+        disposition = "attachment" if download else "inline"
+        safe_name = attachment.file_name.replace('"', "")
+        return Response(
+            content=attachment.content,
+            media_type=attachment.content_type,
+            headers={"Content-Disposition": f'{disposition}; filename="{safe_name}"'},
+        )
+
+
+@app.get("/recipes/{recipe_id}/export/submission.xlsx")
+def export_recipe_submission(recipe_id: int):
+    with SessionLocal() as db:
+        recipe = db.get(Recipe, recipe_id)
+        if recipe is None:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        return Response(
+            content=build_recipe_submission_workbook(recipe),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="recipe-{recipe_id}-submission.xlsx"'},
+        )
+
+
+@app.get("/recipes/{recipe_id}/export/nutrition.xlsx")
+def export_recipe_nutrition(recipe_id: int):
+    with SessionLocal() as db:
+        recipe = db.get(Recipe, recipe_id)
+        if recipe is None:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        return Response(
+            content=build_nutrition_workbook(recipe),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="recipe-{recipe_id}-nutrition-analysis.xlsx"'},
+        )
+
+
 @app.get("/menus", response_model=list[MenuSummaryOut])
 def list_menus():
     with SessionLocal() as db:
@@ -158,6 +371,7 @@ def list_menus():
         for menu in menus:
             items = db.scalars(select(MenuItem).where(MenuItem.menu_id == menu.id).order_by(MenuItem.position.asc())).all()
             recipe_rows = db.scalars(select(Recipe).where(Recipe.recipe_id.in_([item.recipe_id for item in items]))).all()
+            recipe_map = {recipe.recipe_id: recipe for recipe in recipe_rows}
             start_date = menu.start_date or menu.service_date
             summaries.append(
                 MenuSummaryOut(
@@ -196,7 +410,7 @@ def list_menus():
                     approval_notes=menu.approval_notes,
                     is_favorite=bool(menu.is_favorite),
                     item_count=len(items),
-                    recipe_names=[recipe.recipe_name for recipe in recipe_rows],
+                    recipe_names=[recipe_map[item.recipe_id].recipe_name for item in items if item.recipe_id in recipe_map],
                 )
             )
         return summaries
@@ -267,10 +481,11 @@ def get_sample_menu(menu_id: int):
                 HistoricalMenuItemOut(
                     recipe_id=item.recipe_id,
                     position=item.position,
+                    day_index=item.day_index,
                     meal_slot=item.meal_slot,
-                    component_key=item.meal_slot,
-                    is_alternate=False,
-                    source_type="sample",
+                    component_key=item.component_key or item.meal_slot,
+                    is_alternate=item.is_alternate,
+                    source_type=item.source_type,
                     recipe=RecipeOut.model_validate(recipe_map[item.recipe_id]),
                 )
                 for item in items

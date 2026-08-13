@@ -1,5 +1,8 @@
 @page "/reports"
 @inject AppModeService AppMode
+@inject PythonApiClient Api
+@inject PrintQueueService PrintQueue
+@inject IJSRuntime Js
 
 <div class="grid" style="gap: 18px">
     <section class="section">
@@ -139,7 +142,7 @@
                     </label>
                 </div>
                 <div class="hero-actions" style="margin-top: 16px">
-                    <button type="button" class="button" @onclick="ViewReport">View Report</button>
+                    <button type="button" class="button" @onclick="ViewReport" disabled="@_loadingReport">@(_loadingReport ? "Loading..." : "View Report")</button>
                     <button type="button" class="ghost-button" @onclick="ResetReport">Reset</button>
                 </div>
             }
@@ -149,6 +152,105 @@
             }
         </section>
     </div>
+
+    @if (_showPreview && CurrentReport is not null)
+    {
+        <section class="section report-preview">
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">Report preview</div>
+                    <h2 style="margin-bottom: 6px">@CurrentReport.Name</h2>
+                    <p class="muted" style="margin: 0">@ReportParameterSummary</p>
+                </div>
+                <div class="hero-actions no-print">
+                    <button type="button" class="secondary-button" @onclick="AddReportToQueue">Add to print queue</button>
+                    <button type="button" class="button" @onclick="PrintReport">Print or save as PDF</button>
+                </div>
+            </div>
+
+            @if (!_reportMenus.Any())
+            {
+                <div class="empty-state" style="margin-top: 16px">No menus match the selected report fields.</div>
+            }
+            else
+            {
+                <div class="admin-table-wrap" style="margin-top: 16px">
+                    <table class="admin-table report-result-table">
+                        <thead>
+                            <tr>
+                                <th>Menu ID</th>
+                                <th>Menu</th>
+                                <th>Contract</th>
+                                <th>Meal</th>
+                                <th>Service dates</th>
+                                <th>Status</th>
+                                <th>Items</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var menu in _reportMenus)
+                            {
+                                <tr>
+                                    <td>@menu.Id</td>
+                                    <td><strong>@menu.Name</strong></td>
+                                    <td>@(menu.ContractName ?? string.Join(", ", menu.Contracts))</td>
+                                    <td>@(menu.MealType ?? menu.MenuCoverage ?? "All meals")</td>
+                                    <td>@ServiceDateRange(menu)</td>
+                                    <td>@menu.Status</td>
+                                    <td>@menu.ItemCount</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @foreach (var detail in _reportDetails)
+                {
+                    <article class="report-menu-detail">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 4px">@detail.Menu.Name</h3>
+                                <p class="muted" style="margin: 0">Menu ID @detail.Menu.Id · @detail.Menu.Status · @detail.Analysis.OverallStatus nutrition check</p>
+                            </div>
+                        </div>
+                        <div class="report-nutrition-row">
+                            @foreach (var nutrient in detail.Analysis.Statuses)
+                            {
+                                <div class="report-nutrient">
+                                    <span class="small muted">@NutrientLabel(nutrient.NutrientKey)</span>
+                                    <strong>@nutrient.Total.ToString("0.##") @nutrient.Unit</strong>
+                                    <span class="status-badge @StatusClass(nutrient.Status)">@nutrient.Status</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="admin-table-wrap">
+                            <table class="admin-table report-item-table">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Meal</th>
+                                        <th>Component</th>
+                                        <th>Recipe</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in ReportItems(detail).OrderBy(item => item.DayIndex).ThenBy(item => item.Position))
+                                    {
+                                        <tr>
+                                            <td>@DayLabel(item.DayIndex, detail.Menu.StartDate ?? detail.Menu.ServiceDate)</td>
+                                            <td>@MealSlotLabel(item.MealSlot)</td>
+                                            <td>@ComponentLabel(item.ComponentKey)</td>
+                                            <td><strong>@item.Recipe.RecipeName</strong></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                }
+            }
+        </section>
+    }
 </div>
 
 @code {
@@ -162,6 +264,10 @@
     private string MealType { get; set; } = "Lunch";
     private string ExportFormat { get; set; } = "PDF";
     private string? Message { get; set; }
+    private bool _loadingReport;
+    private bool _showPreview;
+    private List<MenuSummaryDto> _reportMenus = [];
+    private List<MenuDetailDto> _reportDetails = [];
 
     private bool IsProvider => CurrentRole == AppRole.Provider;
 
@@ -179,6 +285,20 @@
 
     private LegacyReportDefinition? CurrentReport =>
         VisibleReports.FirstOrDefault(report => report.Key == SelectedReport);
+
+    private string ReportParameterSummary
+    {
+        get
+        {
+            var details = new List<string>();
+            if (CurrentReport?.NeedsContractId == true) details.Add($"Contract: {ContractId}");
+            if (CurrentReport?.NeedsMenuId == true && !string.IsNullOrWhiteSpace(MenuId)) details.Add($"Menu ID: {MenuId}");
+            if (CurrentReport?.NeedsDate == true) details.Add($"Date: {PrintDate:MMM d, yyyy}");
+            if (CurrentReport?.NeedsYearMonth == true) details.Add($"Month: {YearMonth}");
+            if (CurrentReport?.NeedsMealType == true) details.Add($"Meal: {MealType}");
+            return details.Any() ? string.Join(" · ", details) : "All matching menu records";
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -199,9 +319,12 @@
         SelectedReport = key;
         ExportFormat = CurrentReport?.ExportFormats.FirstOrDefault() ?? "PDF";
         Message = null;
+        _showPreview = false;
+        _reportMenus = [];
+        _reportDetails = [];
     }
 
-    private void ViewReport()
+    private async Task ViewReport()
     {
         if (CurrentReport is null)
         {
@@ -209,29 +332,58 @@
             return;
         }
 
-        var details = new List<string> { CurrentReport.Name, ExportFormat };
-        if (CurrentReport.NeedsContractId)
+        _loadingReport = true;
+        Message = null;
+        try
         {
-            details.Add(ContractId);
-        }
-        if (CurrentReport.NeedsMenuId && !string.IsNullOrWhiteSpace(MenuId))
-        {
-            details.Add($"Menu ID {MenuId}");
-        }
-        if (CurrentReport.NeedsDate)
-        {
-            details.Add(PrintDate.ToString("MMM d, yyyy"));
-        }
-        if (CurrentReport.NeedsYearMonth)
-        {
-            details.Add(YearMonth);
-        }
-        if (CurrentReport.NeedsMealType)
-        {
-            details.Add(MealType);
-        }
+            IEnumerable<MenuSummaryDto> matches = await Api.GetMenusAsync();
+            if (CurrentReport.NeedsContractId && !string.IsNullOrWhiteSpace(ContractId))
+            {
+                matches = matches.Where(menu =>
+                    string.Equals(menu.ContractName, ContractId, StringComparison.OrdinalIgnoreCase)
+                    || menu.Contracts.Any(contract => string.Equals(contract, ContractId, StringComparison.OrdinalIgnoreCase)));
+            }
+            if (CurrentReport.NeedsMenuId && int.TryParse(MenuId, out var menuId))
+            {
+                matches = matches.Where(menu => menu.Id == menuId);
+            }
+            if (CurrentReport.NeedsDate)
+            {
+                matches = matches.Where(menu => DateInMenuRange(PrintDate.Date, menu));
+            }
+            if (CurrentReport.NeedsYearMonth && DateTime.TryParse($"{YearMonth}-01", out var month))
+            {
+                matches = matches.Where(menu => (menu.StartDate ?? menu.ServiceDate).Year == month.Year
+                    && (menu.StartDate ?? menu.ServiceDate).Month == month.Month);
+            }
+            if (CurrentReport.NeedsMealType && !string.IsNullOrWhiteSpace(MealType))
+            {
+                matches = matches.Where(menu =>
+                    string.Equals(menu.MealType, MealType, StringComparison.OrdinalIgnoreCase)
+                    || (menu.MenuCoverage?.Contains(MealType, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
 
-        Message = $"Report ready: {string.Join(" · ", details)}.";
+            _reportMenus = matches.OrderBy(menu => menu.StartDate ?? menu.ServiceDate).ThenBy(menu => menu.Name).ToList();
+            _reportDetails = [];
+            foreach (var menu in _reportMenus.Take(8))
+            {
+                var detail = await Api.GetMenuAsync(menu.Id);
+                if (detail is not null) _reportDetails.Add(detail);
+            }
+            _showPreview = true;
+            Message = _reportMenus.Any()
+                ? $"Showing {_reportMenus.Count} matching menu{(_reportMenus.Count == 1 ? "" : "s")}."
+                : "No menus match the selected report fields.";
+        }
+        catch (Exception ex)
+        {
+            Message = $"The report could not be loaded: {ex.Message}";
+            _showPreview = false;
+        }
+        finally
+        {
+            _loadingReport = false;
+        }
     }
 
     private void ResetReport()
@@ -243,5 +395,70 @@
         MealType = "Lunch";
         ExportFormat = CurrentReport?.ExportFormats.FirstOrDefault() ?? "PDF";
         Message = null;
+        _showPreview = false;
+        _reportMenus = [];
+        _reportDetails = [];
     }
+
+    private async Task PrintReport() => await Js.InvokeVoidAsync("window.print");
+
+    private void AddReportToQueue()
+    {
+        if (CurrentReport is null) return;
+        var added = PrintQueue.Add("Report", CurrentReport.Name, "/reports", ReportParameterSummary);
+        Message = added ? "Report added to the print queue." : "This report is already in the print queue.";
+    }
+
+    private static bool DateInMenuRange(DateTime date, MenuSummaryDto menu)
+    {
+        var start = (menu.StartDate ?? menu.ServiceDate).Date;
+        var end = (menu.EndDate ?? start.AddDays(Math.Max(menu.DaysPerWeek, 1) - 1)).Date;
+        return date >= start && date <= end;
+    }
+
+    private static string ServiceDateRange(MenuSummaryDto menu)
+    {
+        var start = menu.StartDate ?? menu.ServiceDate;
+        var end = menu.EndDate ?? start.AddDays(Math.Max(menu.DaysPerWeek, 1) - 1);
+        return start.Date == end.Date ? start.ToString("MMM d, yyyy") : $"{start:MMM d} - {end:MMM d, yyyy}";
+    }
+
+    private static string DayLabel(int dayIndex, DateTime startDate) => $"{startDate.AddDays(dayIndex):ddd, MMM d}";
+
+    private IEnumerable<MenuItemDetailDto> ReportItems(MenuDetailDto detail)
+    {
+        IEnumerable<MenuItemDetailDto> items = detail.Menu.Items;
+        if (CurrentReport?.NeedsDate == true)
+        {
+            var start = (detail.Menu.StartDate ?? detail.Menu.ServiceDate).Date;
+            var dayIndex = (PrintDate.Date - start).Days;
+            items = items.Where(item => item.DayIndex == dayIndex);
+        }
+        if (CurrentReport?.NeedsMealType == true)
+        {
+            items = items.Where(item => MealSlotLabel(item.MealSlot).Equals(MealType, StringComparison.OrdinalIgnoreCase));
+        }
+        return items;
+    }
+
+    private static string MealSlotLabel(string value)
+    {
+        var normalized = value.Replace('-', '_');
+        var first = normalized.Split('_', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? value;
+        return char.ToUpperInvariant(first[0]) + first[1..].ToLowerInvariant();
+    }
+
+    private static string ComponentLabel(string? key) => string.IsNullOrWhiteSpace(key)
+        ? "Menu item"
+        : key.Replace("-", " ").Replace("grains", "grain", StringComparison.OrdinalIgnoreCase);
+
+    private static string NutrientLabel(string key) => key.Replace("_mg", "").Replace("_g", "").Replace('_', ' ');
+
+    private static string StatusClass(string status) => status.ToLowerInvariant() switch
+    {
+        "pass" => "good",
+        "warning" => "warn",
+        "fail" => "bad",
+        _ => "brand"
+    };
 }

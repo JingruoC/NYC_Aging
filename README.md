@@ -20,10 +20,16 @@ The MVP currently supports:
 
 - Admin / Department staff and Provider / Caterer role views
 - Home to-do lists that change by role
+- Admin-managed home announcements and long-form stories with optional pictures
 - Approved recipe browsing, favorites, category filters, and recipe details
-- New recipe submission based on the Simple Servings recipe-entry workflow
-- Admin recipe review with direct field editing, comments, and email-ready comment summaries
+- Admin-managed Recipe Home category visibility and multi-tag recipe filtering
+- Provider recipe submission based on the current Simple Servings intake workflow
+- A separate, compact admin recipe-entry form for direct catalog maintenance
+- Admin recipe review with direct field editing, attachment open/download, comments, and email-ready comment summaries
+- Excel exports for the original recipe submission and normalized nutrition analysis
 - Weekly menu building with 5-day / 7-day service patterns and cycle weeks
+- Whole-week copy/swap, item copy-to-week, explicit day clearing, selectable service days, and duplicate-safe recipe placement
+- A full-width seven-day board plus compact/full-screen nutrition review
 - Component-based meal planning for breakfast, lunch, and dinner
 - Sample menu browsing with calendar-style previews
 - Saved menu list with legacy-style filters
@@ -31,6 +37,7 @@ The MVP currently supports:
 - Provider-visible comments for returned menus
 - Reports catalog for provider printing workflows
 - Resource file list with categories, descriptions, audience, upload dates, and admin-only add/remove actions
+- A shared print queue for recipes, menus, sample menus, and resources
 
 ## Project Layout
 
@@ -121,6 +128,18 @@ dotnet restore
 dotnet run -- --urls http://127.0.0.1:5050
 ```
 
+## Repeatable QA Smoke Test
+
+With the local app running, execute:
+
+```bash
+python3 scripts/qa-smoke.py
+```
+
+The smoke test verifies seeded recipes and complete weekly menus, home updates, nutrition analysis, deterministic recommendations, historical similarity, recipe attachments, and both Excel exports.
+
+The detailed feature review is recorded in [`docs/acceptance-checklist.md`](docs/acceptance-checklist.md). Native pointer drag/drop remains a manual browser/device QA item; selecting a cell and using `Add` is the tested accessible fallback.
+
 ## Main Routes
 
 - `/` - role-specific home and to-do list
@@ -138,6 +157,7 @@ dotnet run -- --urls http://127.0.0.1:5050
 - `/sample-menus/{id}` - sample menu calendar preview
 - `/reports` - report catalog
 - `/resources` - resource files
+- `/reports/print-queue` - queued recipes, menus, sample menus, and resources
 
 ## Backend API
 
@@ -149,6 +169,12 @@ Core endpoints:
 - `POST /recipes`
 - `GET /recipes/{recipe_id}`
 - `PUT /recipes/{recipe_id}`
+- `GET /recipes/{recipe_id}/attachments`
+- `POST /recipes/{recipe_id}/attachments`
+- `GET /recipes/{recipe_id}/attachments/{attachment_id}?download=false` - open inline
+- `GET /recipes/{recipe_id}/attachments/{attachment_id}?download=true` - download original file
+- `GET /recipes/{recipe_id}/export/submission.xlsx` - direct FastAPI Excel export
+- `GET /recipes/{recipe_id}/export/nutrition.xlsx` - direct FastAPI Nutritionist Pro-style Excel export
 - `GET /recipes/{recipe_id}/comments`
 - `POST /recipes/{recipe_id}/comments`
 - `GET /menus`
@@ -163,13 +189,18 @@ Core endpoints:
 - `POST /recommendations/autocomplete`
 - `POST /recommendations/revisions`
 - `POST /recommendations/similar-menus`
+- `GET /home-updates`
+- `GET /home-updates/{update_id}`
+- `POST /home-updates`
+- `GET /recipe-home-categories`
+- `PUT /recipe-home-categories/{category_key}`
 - `GET /analytics`
 
 `GET /analytics` is used internally by the UI for usage and pairing summaries; there is no separate top-level analytics page in the current Blazor app.
 
 ## Data and Recommendations
 
-The seed data includes realistic mock recipes, historical menus, sample menus, menu comments, recipe comments, nutrient thresholds, and common menu-review states. It is safe demo data and is meant to match the granularity of the existing Simple Servings workflow before real data integration.
+The seed data includes realistic mock recipes, complete weekly menus, historical/sample menus, recipe and menu comments, nutrient thresholds, common review states, and representative PDF/Excel recipe attachments. It is safe demo data and is meant to match the granularity of the existing Simple Servings workflow before real data integration.
 
 Recommendation behavior is based on:
 
@@ -202,8 +233,10 @@ For the local SQLite launcher, the backend creates tables from SQLAlchemy models
 ## Current Limitations
 
 - Authentication and authorization are simulated with the role switcher.
-- Resource upload/open actions are local UI workflow mocks, not file storage integration.
+- Recipe attachments and uploaded resource files are stored by the prototype backend. Render demo storage is ephemeral, so production deployment still needs a durable object/file store.
+- Seeded recipes include scalable mock production quantities. Uploaded recipes can only scale ingredient lines that begin with a numeric amount; the original Nutritionist Pro workbook remains available when its proprietary fields cannot be normalized safely.
+- Nutritionist Pro Excel files are retained intact as source attachments while the standard nutrient fields are also stored structurally. Mapping every vendor-specific workbook field into queryable database columns is a production-integration task.
+- The print queue is session-local and uses the browser print dialog for prototype output.
 - The prototype is not connected to the existing NYC Aging SQL Server yet.
 - The archived Next.js prototype remains in `frontend/` for comparison and can be removed later if the team wants a smaller public repo.
-- There is not yet an automated test suite; current validation is build and compile checks.
-
+- Current validation covers .NET/Python builds, direct API workflow checks, and browser interaction testing. A permanent CI test suite is still a future hardening step.

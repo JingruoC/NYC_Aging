@@ -22,68 +22,78 @@
                 </div>
                 <input class="input" value="@SearchText" @oninput="OnSearchChanged" placeholder="Search by recipe name, ingredient, tag, or meal type" />
                 <div class="filter-group">
-                    <div class="small muted">View</div>
-                    <div class="toggle-row">
-                        <button type="button" class="@FilterToggleClass(RecipeViewMode == RecommendedMode)" @onclick="() => SetRecipeViewMode(RecommendedMode)">Recommended</button>
-                        <button type="button" class="@FilterToggleClass(RecipeViewMode == BreakfastMode)" @onclick="() => SetRecipeViewMode(BreakfastMode)">Breakfast</button>
-                        <button type="button" class="@FilterToggleClass(RecipeViewMode == LunchMode)" @onclick="() => SetRecipeViewMode(LunchMode)">Lunch</button>
-                        <button type="button" class="@FilterToggleClass(RecipeViewMode == DinnerMode)" @onclick="() => SetRecipeViewMode(DinnerMode)">Dinner</button>
-                        <button type="button" class="@FilterToggleClass(RecipeViewMode == AllMode)" @onclick="() => SetRecipeViewMode(AllMode)">All</button>
-                    </div>
+                    <label for="recipe-meal-view" class="small muted">Meal view</label>
+                    <select id="recipe-meal-view" class="input compact-filter-select" value="@RecipeViewMode" @onchange="OnRecipeViewChanged">
+                        <option value="@RecommendedMode">Recommended</option>
+                        <option value="@BreakfastMode">Breakfast</option>
+                        <option value="@LunchMode">Lunch</option>
+                        <option value="@DinnerMode">Dinner</option>
+                        <option value="@AllMode">All meal types</option>
+                    </select>
                 </div>
-                <div class="filter-group">
-                    <div class="small muted">Status</div>
-                    <div class="toggle-row">
-                        <button type="button" class="@FilterToggleClass(StatusMode == AllStatusMode)" @onclick="() => SetStatusMode(AllStatusMode)">All</button>
-                        <button type="button" class="@FilterToggleClass(StatusMode == ApprovedStatusMode)" @onclick="() => SetStatusMode(ApprovedStatusMode)">Approved</button>
-                        <button type="button" class="@FilterToggleClass(StatusMode == DraftStatusMode)" @onclick="() => SetStatusMode(DraftStatusMode)">Pending review</button>
+                @if (IsAdmin)
+                {
+                    <div class="filter-group">
+                        <label for="recipe-status" class="small muted">Workflow status</label>
+                        <select id="recipe-status" class="input compact-filter-select" value="@StatusMode" @onchange="OnStatusChanged">
+                            <option value="@AllStatusMode">All statuses</option>
+                            <option value="@ApprovedStatusMode">Approved</option>
+                            <option value="@DraftStatusMode">Pending review</option>
+                        </select>
                     </div>
-                </div>
+                }
                 <div class="filter-group">
-                    <div class="small muted">Advanced Search By Category</div>
-                    <InputSelect class="input" @bind-Value="LegacyFilterGroupKey">
-                        <option value="">[Select]</option>
+                    <label for="recipe-tag-group" class="small muted">Tag group</label>
+                    <InputSelect id="recipe-tag-group" class="input compact-filter-select" @bind-Value="LegacyFilterGroupKey">
+                        <option value="">Choose a tag group</option>
                         @foreach (var group in LegacyReferenceData.RecipeFilterGroups)
                         {
                             <option value="@group.Key">@group.Label</option>
                         }
                     </InputSelect>
-                    <InputSelect class="input" @bind-Value="LegacyFilterValue">
-                        <option value="">[All]</option>
+                    <label for="recipe-tag-value" class="small muted">Tag</label>
+                    <InputSelect id="recipe-tag-value" class="input compact-filter-select" @bind-Value="LegacyFilterValue">
+                        <option value="">Choose a tag</option>
                         @foreach (var option in LegacyFilterOptions)
                         {
                             <option value="@option">@option</option>
                         }
                     </InputSelect>
+                    <button type="button" class="secondary-button" @onclick="AddTagFilter" disabled="@string.IsNullOrWhiteSpace(LegacyFilterValue)">Add filter</button>
+                    @if (SelectedTagFilters.Any())
+                    {
+                        <div class="selected-filter-list">
+                            @foreach (var filter in SelectedTagFilters.OrderBy(value => value))
+                            {
+                                <button type="button" class="selected-filter-chip" @onclick="() => RemoveTagFilter(filter)">
+                                    <span>@filter</span><span aria-hidden="true">×</span>
+                                </button>
+                            }
+                        </div>
+                        <button type="button" class="text-action" @onclick="ClearTagFilters">Clear tag filters</button>
+                    }
                 </div>
                 <div class="filter-group">
-                    <div class="small muted">Category</div>
-                    <div class="filter-chip-grid">
-                        <button type="button" class="@FilterToggleClass(CategoryMode == AllCategoriesMode)" @onclick="() => SetCategoryMode(AllCategoriesMode)">All</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == EntreeCategory)" @onclick="() => SetCategoryMode(EntreeCategory)">Entree</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == SideCategory)" @onclick="() => SetCategoryMode(SideCategory)">Side</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == GrainCategory)" @onclick="() => SetCategoryMode(GrainCategory)">Grain</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == FruitCategory)" @onclick="() => SetCategoryMode(FruitCategory)">Fruit</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == VegetableCategory)" @onclick="() => SetCategoryMode(VegetableCategory)">Vegetable</button>
-                        <button type="button" class="@FilterToggleClass(CategoryMode == MilkCategory)" @onclick="() => SetCategoryMode(MilkCategory)">Milk</button>
-                    </div>
+                    <label for="recipe-category" class="small muted">Recipe category</label>
+                    <select id="recipe-category" class="input compact-filter-select" value="@CategoryMode" @onchange="OnCategoryChanged">
+                        <option value="@AllCategoriesMode">All categories</option>
+                        <option value="@EntreeCategory">Entree</option>
+                        <option value="@SideCategory">Side</option>
+                        <option value="@GrainCategory">Grain</option>
+                        <option value="@FruitCategory">Fruit</option>
+                        <option value="@VegetableCategory">Vegetable</option>
+                        <option value="@MilkCategory">Milk</option>
+                    </select>
                 </div>
                 <div class="filter-group">
-                    <div class="small muted">Legacy shortcuts</div>
+                    <div class="small muted">Saved filters</div>
                     <div class="toggle-row">
                         <button type="button" class="@FilterToggleClass(FavoritesOnly)" @onclick="ToggleFavoritesOnly">My Favorites</button>
-                        <button type="button" class="@FilterToggleClass(ShowDead)" @onclick="ToggleShowDead">Show Dead</button>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <div class="small muted">Filter by Tag</div>
-                    <InputSelect class="input" @bind-Value="TagMode">
-                        <option value="@AllTagsMode">All tags</option>
-                        @foreach (var tag in DistinctTags)
+                        @if (IsAdmin)
                         {
-                            <option value="@tag">@tag</option>
+                            <button type="button" class="@FilterToggleClass(IncludeArchived)" @onclick="ToggleIncludeArchived">Include archived</button>
                         }
-                    </InputSelect>
+                    </div>
                 </div>
             </aside>
 
@@ -92,16 +102,15 @@
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">@RecipeViewTitle</h3>
-                            <p class="muted small" style="margin: 0">
-                                Showing @FilteredRecipesList.Count() matching recipe@(FilteredRecipesList.Count() == 1 ? "" : "s")
-                                after filters. @ApprovedCount approved recipes are in the catalog. Status: @StatusLabel.
-                            </p>
+                            <p class="muted small" style="margin: 0">@FilteredRecipesList.Count() recipe@(FilteredRecipesList.Count() == 1 ? "" : "s") match the current filters.</p>
                         </div>
                         <div class="results-toolbar recipe-results-toolbar">
-                            <span class="muted small">Show rows</span>
-                            <button type="button" class="@PageSizeClass(25)" @onclick="() => SetVisibleRecipeCount(25)">25</button>
-                            <button type="button" class="@PageSizeClass(50)" @onclick="() => SetVisibleRecipeCount(50)">50</button>
-                            <button type="button" class="@PageSizeClass(int.MaxValue)" @onclick="() => SetVisibleRecipeCount(int.MaxValue)">All</button>
+                            <label for="recipe-page-size" class="muted small">Rows</label>
+                            <select id="recipe-page-size" class="compact-page-size" value="@VisibleRecipeCount" @onchange="OnVisibleRecipeCountChanged">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="@int.MaxValue">All</option>
+                            </select>
                         </div>
                     </div>
 
@@ -111,12 +120,13 @@
                                 <thead>
                                     <tr>
                                         <th>Recipe</th>
-                                        <th>Calories</th>
-                                        <th>Sodium</th>
-                                        <th>Protein</th>
-                                        <th>Fiber</th>
-                                        <th>Fat</th>
-                                        <th>Actions</th>
+                                        <th>Description</th>
+                                        <th><button type="button" class="sortable-column" @onclick="ToggleUploadDateSort">Uploaded @UploadSortIndicator</button></th>
+                                        <th>Visibility / Status</th>
+                                        @if (IsAdmin)
+                                        {
+                                            <th>Action</th>
+                                        }
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -127,41 +137,36 @@
                                                 <div class="recipe-registry-name">
                                                     <div class="table-title-row">
                                                         <span class="status-badge">#@recipe.RecipeId</span>
-                                                        <strong>@recipe.RecipeName</strong>
+                                                        <a class="recipe-registry-link" href="@($"/recipes/{recipe.RecipeId}")">@recipe.RecipeName</a>
                                                         <span class="status-badge @(recipe.IsApproved ? "good" : "warn")">@ApprovalLabel(recipe)</span>
                                                     </div>
-                                                    <div class="muted small">@recipe.MealType · @recipe.Category · @recipe.ServingSize</div>
-                                                    <div class="muted small">Contributed by @(recipe.ContributedBy ?? "N/A") · Created on @recipe.CreatedOn?.ToString("MMM d, yyyy")</div>
-                                                    <div class="tag-list compact-tags">
-                                                        @if (recipe.IsFavorite)
-                                                        {
-                                                            <span class="tag-chip">Favorite</span>
-                                                        }
-                                                        @foreach (var tag in recipe.Tags.Concat(recipe.NutrientClaims).Distinct().Take(4))
-                                                        {
-                                                            <span class="tag-chip">@tag</span>
-                                                        }
-                                                    </div>
+                                                    <div class="muted small">@DisplayMealType(recipe.MealType) · @DisplayCategory(recipe.Category)</div>
+                                                    <div class="muted small">Contributed by @(recipe.ContributedBy ?? "Not listed")</div>
                                                 </div>
                                             </td>
-                                            <td><strong>@recipe.Calories</strong> kcal</td>
-                                            <td><strong>@recipe.SodiumMg</strong> mg</td>
-                                            <td><strong>@recipe.ProteinG</strong> g</td>
-                                            <td><strong>@recipe.FiberG</strong> g</td>
-                                            <td><strong>@recipe.FatG</strong> g</td>
+                                            <td><span class="recipe-one-line-description">@RecipeDescription(recipe)</span></td>
+                                            <td>@(recipe.CreatedOn?.ToString("MMM d, yyyy") ?? "Not recorded")</td>
                                             <td>
-                                                <div class="table-action-stack">
-                                                    <a class="table-action-link" href="@($"/recipes/{recipe.RecipeId}")">Open</a>
-                                                    @if (AppMode.IsAdmin && !recipe.IsApproved)
+                                                <div class="resource-meta-stack">
+                                                    <span>@(recipe.IsPublic ? "Public" : "Private")</span>
+                                                    <span class="status-badge @(recipe.IsDead ? "" : recipe.IsApproved ? "good" : "warn")">@(recipe.IsDead ? "Archived" : ApprovalLabel(recipe))</span>
+                                                </div>
+                                            </td>
+                                            @if (IsAdmin)
+                                            {
+                                                <td>
+                                                    <div class="table-actions">
+                                                    @if (!recipe.IsApproved)
                                                     {
                                                         <a class="table-action-link primary" href="@($"/recipes/{recipe.RecipeId}/review")">Review</a>
                                                     }
-                                                    else if (AppMode.IsAdmin)
+                                                    else
                                                     {
                                                         <a class="table-action-link primary" href="@($"/recipes/{recipe.RecipeId}/edit")">Edit</a>
                                                     }
-                                                </div>
-                                            </td>
+                                                    </div>
+                                                </td>
+                                            }
                                         </tr>
                                     }
                                 </tbody>
@@ -175,11 +180,22 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private AppRole CurrentRole { get; set; } = AppRole.Admin;
+
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+
     [SupplyParameterFromQuery(Name = "legacy")]
     public string? LegacyFilter { get; set; }
 
     [SupplyParameterFromQuery(Name = "status")]
     public string? StatusFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "category")]
+    public string? CategoryFilter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "meal")]
+    public string? MealFilter { get; set; }
 
     private const string RecommendedMode = "recommended";
     private const string AllMode = "all";
@@ -190,7 +206,6 @@
     private const string ApprovedStatusMode = "approved";
     private const string DraftStatusMode = "draft";
     private const string AllCategoriesMode = "all";
-    private const string AllTagsMode = "all";
     private const string EntreeCategory = "entree";
     private const string SideCategory = "side";
     private const string GrainCategory = "grain";
@@ -202,11 +217,13 @@
     private string RecipeViewMode { get; set; } = RecommendedMode;
     private string StatusMode { get; set; } = AllStatusMode;
     private string CategoryMode { get; set; } = AllCategoriesMode;
-    private string TagMode { get; set; } = AllTagsMode;
     private string LegacyFilterGroupKey { get; set; } = string.Empty;
     private string LegacyFilterValue { get; set; } = string.Empty;
     private bool FavoritesOnly { get; set; }
-    private bool ShowDead { get; set; }
+    private bool IncludeArchived { get; set; }
+    private bool SortByUploadDate { get; set; } = true;
+    private bool UploadDateDescending { get; set; } = true;
+    private HashSet<string> SelectedTagFilters { get; } = new(StringComparer.OrdinalIgnoreCase);
     private int VisibleRecipeCount { get; set; } = 25;
     private List<RecipeDto> RecipeItems { get; set; } = new();
     private List<int> PopularRecipeIds { get; set; } = new();
@@ -223,6 +240,7 @@
         if (!string.IsNullOrWhiteSpace(LegacyFilter))
         {
             LegacyFilterValue = LegacyFilter;
+            SelectedTagFilters.Add(LegacyFilter);
             LegacyFilterGroupKey = LegacyReferenceData.RecipeFilterGroups
                 .FirstOrDefault(group => group.Options.Any(option => option.Equals(LegacyFilter, StringComparison.OrdinalIgnoreCase)))?.Key
                 ?? string.Empty;
@@ -237,14 +255,31 @@
                 _ => AllStatusMode
             };
         }
+
+        if (!string.IsNullOrWhiteSpace(CategoryFilter))
+        {
+            CategoryMode = CategoryFilter.Trim().ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(MealFilter))
+        {
+            RecipeViewMode = MealFilter.Trim().ToLowerInvariant() switch
+            {
+                BreakfastMode => BreakfastMode,
+                LunchMode => LunchMode,
+                DinnerMode => DinnerMode,
+                _ => RecommendedMode
+            };
+        }
     }
 
     private int ApprovedCount => RecipeItems.Count(recipe => recipe.IsApproved);
 
-    private IEnumerable<RecipeDto> FilteredRecipesList =>
+    private IEnumerable<RecipeDto> FilteredRecipesList => SortRecipes(
         RecipeItems
+            .Where(recipe => IsAdmin || (recipe.IsPublic && recipe.IsApproved && !recipe.IsDead))
             .Where(recipe => recipe.Matches(SearchText))
-            .Where(recipe => ShowDead || recipe.IsApproved || StatusMode == DraftStatusMode)
+            .Where(recipe => IncludeArchived || !recipe.IsDead)
             .Where(recipe => StatusMode == AllStatusMode
                 || (StatusMode == ApprovedStatusMode && recipe.IsApproved)
                 || (StatusMode == DraftStatusMode && !recipe.IsApproved))
@@ -254,25 +289,24 @@
             .Where(recipe => !FavoritesOnly || recipe.IsFavorite)
             .Where(recipe => CategoryMode == AllCategoriesMode
                 || recipe.Category.Equals(CategoryMode, StringComparison.OrdinalIgnoreCase))
-            .Where(recipe => TagMode == AllTagsMode
-                || recipe.Tags.Concat(recipe.NutrientClaims).Any(tag => tag.Equals(TagMode, StringComparison.OrdinalIgnoreCase)))
-            .Where(MatchesLegacyFilter)
-            .OrderBy(recipe => Rank(recipe));
+            .Where(MatchesSelectedFilters));
 
     private IEnumerable<RecipeDto> RecommendedRecipes =>
         PopularRecipeIds.Count == 0
-            ? RecipeItems.Where(recipe => recipe.IsFavorite).Take(6)
+            ? RecipeItems
+                .Where(recipe => IsAdmin || (recipe.IsPublic && recipe.IsApproved && !recipe.IsDead))
+                .Where(recipe => recipe.IsFavorite)
+                .Take(6)
             : RecipeItems
+                .Where(recipe => IsAdmin || (recipe.IsPublic && recipe.IsApproved && !recipe.IsDead))
                 .Where(recipe => recipe.Matches(SearchText))
-                .Where(recipe => ShowDead || recipe.IsApproved || StatusMode == DraftStatusMode)
+                .Where(recipe => IncludeArchived || !recipe.IsDead)
                 .Where(recipe => StatusMode == AllStatusMode
                     || (StatusMode == ApprovedStatusMode && recipe.IsApproved)
                     || (StatusMode == DraftStatusMode && !recipe.IsApproved))
                 .Where(recipe => CategoryMode == AllCategoriesMode
                     || recipe.Category.Equals(CategoryMode, StringComparison.OrdinalIgnoreCase))
-                .Where(recipe => TagMode == AllTagsMode
-                    || recipe.Tags.Concat(recipe.NutrientClaims).Any(tag => tag.Equals(TagMode, StringComparison.OrdinalIgnoreCase)))
-                .Where(MatchesLegacyFilter)
+                .Where(MatchesSelectedFilters)
                 .Where(recipe => recipe.IsFavorite || PopularRecipeIds.Contains(recipe.RecipeId))
                 .OrderByDescending(recipe => recipe.IsFavorite)
                 .ThenBy(recipe => PopularRecipeIds.IndexOf(recipe.RecipeId) < 0 ? 999 : PopularRecipeIds.IndexOf(recipe.RecipeId))
@@ -295,6 +329,15 @@
         ResetVisibleRecipeCount();
     }
 
+    private void OnRecipeViewChanged(ChangeEventArgs args) =>
+        SetRecipeViewMode(args.Value?.ToString() ?? RecommendedMode);
+
+    private void OnStatusChanged(ChangeEventArgs args) =>
+        SetStatusMode(args.Value?.ToString() ?? AllStatusMode);
+
+    private void OnCategoryChanged(ChangeEventArgs args) =>
+        SetCategoryMode(args.Value?.ToString() ?? AllCategoriesMode);
+
     private void OnSearchChanged(ChangeEventArgs args)
     {
         SearchText = args.Value?.ToString() ?? string.Empty;
@@ -313,20 +356,65 @@
         ResetVisibleRecipeCount();
     }
 
-    private void ToggleShowDead()
+    private void ToggleIncludeArchived()
     {
-        ShowDead = !ShowDead;
+        IncludeArchived = !IncludeArchived;
         ResetVisibleRecipeCount();
     }
+
+    private void AddTagFilter()
+    {
+        if (!string.IsNullOrWhiteSpace(LegacyFilterValue))
+        {
+            SelectedTagFilters.Add(LegacyFilterValue);
+            LegacyFilterValue = string.Empty;
+            ResetVisibleRecipeCount();
+        }
+    }
+
+    private void RemoveTagFilter(string filter)
+    {
+        SelectedTagFilters.Remove(filter);
+        ResetVisibleRecipeCount();
+    }
+
+    private void ClearTagFilters()
+    {
+        SelectedTagFilters.Clear();
+        LegacyFilterGroupKey = string.Empty;
+        LegacyFilterValue = string.Empty;
+        ResetVisibleRecipeCount();
+    }
+
+    private void ToggleUploadDateSort()
+    {
+        if (SortByUploadDate)
+        {
+            UploadDateDescending = !UploadDateDescending;
+        }
+        else
+        {
+            SortByUploadDate = true;
+            UploadDateDescending = true;
+        }
+    }
+
+    private string UploadSortIndicator => !SortByUploadDate ? string.Empty : UploadDateDescending ? "↓" : "↑";
 
     private void SetVisibleRecipeCount(int count)
     {
         VisibleRecipeCount = count;
     }
 
-    private void ResetVisibleRecipeCount() => VisibleRecipeCount = 25;
+    private void OnVisibleRecipeCountChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var count))
+        {
+            SetVisibleRecipeCount(count);
+        }
+    }
 
-    private string PageSizeClass(int count) => VisibleRecipeCount == count ? "active" : string.Empty;
+    private void ResetVisibleRecipeCount() => VisibleRecipeCount = 25;
 
     private static string FilterToggleClass(bool isActive) => isActive ? "filter-toggle active" : "filter-toggle";
 
@@ -367,26 +455,22 @@
 
     private static string ApprovalLabel(RecipeDto recipe) => recipe.IsApproved ? "Approved" : "Pending review";
 
-    private IReadOnlyList<string> DistinctTags =>
-        RecipeItems
-            .SelectMany(recipe => recipe.Tags.Concat(recipe.NutrientClaims))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(tag => tag)
-            .ToList();
-
     private IReadOnlyList<string> LegacyFilterOptions =>
         LegacyReferenceData.RecipeFilterGroups
             .FirstOrDefault(group => group.Key == LegacyFilterGroupKey)?.Options
         ?? LegacyReferenceData.RecipeFilterGroups.SelectMany(group => group.Options).ToArray();
 
-    private bool MatchesLegacyFilter(RecipeDto recipe)
+    private bool MatchesSelectedFilters(RecipeDto recipe) =>
+        SelectedTagFilters.All(filter => MatchesTagFilter(recipe, filter));
+
+    private static bool MatchesTagFilter(RecipeDto recipe, string filter)
     {
-        if (string.IsNullOrWhiteSpace(LegacyFilterValue))
+        if (string.IsNullOrWhiteSpace(filter))
         {
             return true;
         }
 
-        var normalizedFilter = LegacyReferenceData.NormalizeFilterValue(LegacyFilterValue);
+        var normalizedFilter = LegacyReferenceData.NormalizeFilterValue(filter);
         var aliases = LegacyFilterAliases(normalizedFilter);
         var haystack = LegacyReferenceData.NormalizeFilterValue(string.Join(' ', new[]
         {
@@ -400,6 +484,62 @@
 
         return aliases.Any(alias => haystack.Contains(alias, StringComparison.OrdinalIgnoreCase));
     }
+
+    private IEnumerable<RecipeDto> SortRecipes(IEnumerable<RecipeDto> recipes)
+    {
+        if (SortByUploadDate)
+        {
+            return UploadDateDescending
+                ? recipes.OrderByDescending(recipe => recipe.CreatedOn ?? DateTime.MinValue).ThenBy(recipe => recipe.RecipeName)
+                : recipes.OrderBy(recipe => recipe.CreatedOn ?? DateTime.MinValue).ThenBy(recipe => recipe.RecipeName);
+        }
+
+        return recipes.OrderBy(Rank).ThenBy(recipe => recipe.RecipeName);
+    }
+
+    private static string RecipeDescription(RecipeDto recipe)
+    {
+        var parts = new List<string>();
+        var ingredients = recipe.Ingredients
+            .Where(value => !value.Contains("file", StringComparison.OrdinalIgnoreCase))
+            .Where(value => !value.StartsWith("Vegetables per serving", StringComparison.OrdinalIgnoreCase))
+            .Where(value => !value.StartsWith("Plant-based protein", StringComparison.OrdinalIgnoreCase))
+            .Where(value => !value.StartsWith("Fruit per serving", StringComparison.OrdinalIgnoreCase))
+            .Take(3)
+            .ToList();
+        if (ingredients.Count > 0)
+        {
+            parts.Add($"Main ingredients: {string.Join(", ", ingredients)}");
+        }
+
+        var cuisine = recipe.Tags.FirstOrDefault(tag => tag.Contains("cuisine", StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(cuisine))
+        {
+            parts.Add(cuisine);
+        }
+
+        var vegetableServing = recipe.Ingredients.FirstOrDefault(value => value.StartsWith("Vegetables per serving", StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(vegetableServing) && !vegetableServing.EndsWith(": 0", StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add(vegetableServing);
+        }
+
+        return parts.Count == 0
+            ? $"{DisplayCategory(recipe.Category)} recipe for {DisplayMealType(recipe.MealType).ToLowerInvariant()} service."
+            : string.Join(" · ", parts);
+    }
+
+    private static string DisplayCategory(string value) => value.ToLowerInvariant() switch
+    {
+        "entree" => "Entrée",
+        "milk" => "Milk/Yogurt",
+        "dairy-free" => "Dairy or non-dairy equivalent",
+        _ => string.IsNullOrWhiteSpace(value) ? "Recipe" : char.ToUpperInvariant(value[0]) + value[1..]
+    };
+
+    private static string DisplayMealType(string value) => string.IsNullOrWhiteSpace(value)
+        ? "Meal"
+        : char.ToUpperInvariant(value[0]) + value[1..];
 
     private static string[] LegacyFilterAliases(string normalizedFilter) => normalizedFilter switch
     {

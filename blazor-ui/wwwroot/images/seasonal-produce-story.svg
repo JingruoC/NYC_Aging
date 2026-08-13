@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" role="img" aria-labelledby="title desc">
+  <title id="title">Seasonal produce</title>
+  <desc id="desc">A calm illustration of vegetables and fruit in an orange serving bowl.</desc>
+  <rect width="800" height="480" fill="#f9efe2"/>
+  <circle cx="240" cy="170" r="94" fill="#d76a18"/>
+  <circle cx="340" cy="128" r="72" fill="#e7a64c"/>
+  <circle cx="450" cy="170" r="92" fill="#9eaa6a"/>
+  <circle cx="552" cy="142" r="68" fill="#c65426"/>
+  <path d="M150 245h500c-25 126-105 184-250 184S175 371 150 245Z" fill="#bd4b00"/>
+  <path d="M212 246c32 71 91 106 188 106s156-35 188-106" fill="none" stroke="#f8c48f" stroke-width="18"/>
+</svg>

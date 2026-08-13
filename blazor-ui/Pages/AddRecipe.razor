@@ -1,7 +1,14 @@
 @page "/recipes/new"
 @inject PythonApiClient Api
 @inject NavigationManager Navigation
+@inject AppModeService AppMode
 
+@if (IsAdmin)
+{
+    <AdminRecipeEntry />
+}
+else
+{
 <div class="grid" style="gap: 18px">
     <section class="section">
         <div class="section-header">
@@ -485,8 +492,14 @@
         </div>
     </EditForm>
 </div>
+}
 
 @code {
+    [CascadingParameter]
+    private AppRole CurrentRole { get; set; } = AppRole.Admin;
+
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+
     private const string FullRecipeType = "full-recipe";
     private const string NutritionAnalysisType = "nutrition-analysis";
     private const string ProductLabelType = "product-label";
@@ -496,6 +509,9 @@
     private readonly List<string> _recipeFileNames = [];
     private readonly List<string> _analysisFileNames = [];
     private readonly List<string> _productFileNames = [];
+    private readonly List<IBrowserFile> _recipeFiles = [];
+    private readonly List<IBrowserFile> _analysisFiles = [];
+    private readonly List<IBrowserFile> _productFiles = [];
     private bool _isSubmitting;
     private string? _message;
 
@@ -585,6 +601,9 @@
         try
         {
             var created = await Api.CreateRecipeAsync(BuildRecipeRequest());
+            await UploadFiles(created.RecipeId, "recipe_source", _recipeFiles);
+            await UploadFiles(created.RecipeId, "nutrition_analysis", _analysisFiles);
+            await UploadFiles(created.RecipeId, "product_label", _productFiles);
             _message = $"Recipe #{created.RecipeId} was submitted for review.";
             Navigation.NavigateTo($"/recipes/{created.RecipeId}");
         }
@@ -700,6 +719,15 @@
         var fiber = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisDietaryFiber) : IsSubmissionType(ProductLabelType) ? Number(_form.DietaryFiber) : 0;
         var fat = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisTotalFat) : IsSubmissionType(ProductLabelType) ? Number(_form.TotalFat) : 0;
         var calcium = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisCalcium) : IsSubmissionType(ProductLabelType) ? Number(_form.Calcium) : 0;
+        var saturatedFat = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisSaturatedFat) : IsSubmissionType(ProductLabelType) ? Number(_form.SaturatedFat) : 0;
+        var transFat = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisTransFat) : IsSubmissionType(ProductLabelType) ? Number(_form.TransFat) : 0;
+        var cholesterol = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisCholesterol) : IsSubmissionType(ProductLabelType) ? Number(_form.Cholesterol) : 0;
+        var carbohydrates = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisTotalCarbohydrate) : IsSubmissionType(ProductLabelType) ? Number(_form.TotalCarbohydrate) : 0;
+        var totalSugars = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisTotalSugars) : IsSubmissionType(ProductLabelType) ? Number(_form.TotalSugars) : 0;
+        var addedSugars = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisAddedSugars) : IsSubmissionType(ProductLabelType) ? Number(_form.AddedSugars) : 0;
+        var vitaminD = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisVitaminD) : IsSubmissionType(ProductLabelType) ? Number(_form.VitaminD) : 0;
+        var iron = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisIron) : IsSubmissionType(ProductLabelType) ? Number(_form.Iron) : 0;
+        var potassium = IsSubmissionType(NutritionAnalysisType) ? Number(_form.AnalysisPotassium) : IsSubmissionType(ProductLabelType) ? Number(_form.Potassium) : 0;
         return new RecipeCreateRequest
         {
             RecipeName = CurrentRecipeNamePreview == "Not entered" ? "Untitled recipe submission" : CurrentRecipeNamePreview,
@@ -724,7 +752,16 @@
             IsDead = false,
             NutrientClaims = BuildNutrientClaims(),
             VitaminCMg = 0,
-            CalciumMg = calcium
+            CalciumMg = calcium,
+            SaturatedFatG = saturatedFat,
+            TransFatG = transFat,
+            CholesterolMg = cholesterol,
+            CarbohydratesG = carbohydrates,
+            TotalSugarsG = totalSugars,
+            AddedSugarsG = addedSugars,
+            VitaminDMcg = vitaminD,
+            IronMg = iron,
+            PotassiumMg = potassium
         };
     }
 
@@ -951,20 +988,33 @@
         _recipeFileNames.Clear();
         _analysisFileNames.Clear();
         _productFileNames.Clear();
+        _recipeFiles.Clear();
+        _analysisFiles.Clear();
+        _productFiles.Clear();
         _errors.Clear();
         _message = null;
     }
 
-    private void CaptureRecipeFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _recipeFileNames, 5);
+    private void CaptureRecipeFiles(InputFileChangeEventArgs args) => CaptureFiles(args, _recipeFiles, _recipeFileNames, 5);
 
-    private void CaptureAnalysisFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _analysisFileNames, 1);
+    private void CaptureAnalysisFiles(InputFileChangeEventArgs args) => CaptureFiles(args, _analysisFiles, _analysisFileNames, 1);
 
-    private void CaptureProductFiles(InputFileChangeEventArgs args) => CaptureFileNames(args, _productFileNames, 4);
+    private void CaptureProductFiles(InputFileChangeEventArgs args) => CaptureFiles(args, _productFiles, _productFileNames, 4);
 
-    private static void CaptureFileNames(InputFileChangeEventArgs args, List<string> target, int maxFiles)
+    private static void CaptureFiles(InputFileChangeEventArgs args, List<IBrowserFile> files, List<string> fileNames, int maxFiles)
     {
-        target.Clear();
-        target.AddRange(args.GetMultipleFiles(maxFiles).Select(file => file.Name));
+        files.Clear();
+        files.AddRange(args.GetMultipleFiles(maxFiles));
+        fileNames.Clear();
+        fileNames.AddRange(files.Select(file => file.Name));
+    }
+
+    private async Task UploadFiles(int recipeId, string fileKind, IEnumerable<IBrowserFile> files)
+    {
+        foreach (var file in files)
+        {
+            await Api.UploadRecipeAttachmentAsync(recipeId, fileKind, file);
+        }
     }
 
     private static string FileListText(IReadOnlyCollection<string> fileNames) =>

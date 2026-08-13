@@ -231,6 +231,7 @@
             .Where(menu => NutritionAdvisorFilter == AllMode || (menu.NutritionAdvisor ?? string.Empty).Equals(NutritionAdvisorFilter, StringComparison.OrdinalIgnoreCase))
             .Where(menu => ProgramTypeFilter == AllMode || (menu.ProgramType ?? string.Empty).Equals(ProgramTypeFilter, StringComparison.OrdinalIgnoreCase))
             .Where(menu => MealTypeFilter == AllMode || (menu.MealType ?? string.Empty).Equals(MealTypeFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(menu => !menu.Status.Equals("Draft", StringComparison.OrdinalIgnoreCase) || menu.ItemCount > 1)
             .OrderByDescending(menu => menu.CreatedAt);
 
     private void OnSearchChanged(ChangeEventArgs args)

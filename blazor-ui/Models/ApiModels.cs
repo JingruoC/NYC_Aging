@@ -35,6 +35,15 @@ public sealed class RecipeDto
     public List<string> NutrientClaims { get; set; } = [];
     public decimal VitaminCMg { get; set; }
     public decimal CalciumMg { get; set; }
+    public decimal SaturatedFatG { get; set; }
+    public decimal TransFatG { get; set; }
+    public decimal CholesterolMg { get; set; }
+    public decimal CarbohydratesG { get; set; }
+    public decimal TotalSugarsG { get; set; }
+    public decimal AddedSugarsG { get; set; }
+    public decimal VitaminDMcg { get; set; }
+    public decimal IronMg { get; set; }
+    public decimal PotassiumMg { get; set; }
 
     public bool Matches(string searchText)
     {
@@ -82,6 +91,26 @@ public sealed class RecipeCreateRequest
     public List<string> NutrientClaims { get; set; } = [];
     public decimal VitaminCMg { get; set; }
     public decimal CalciumMg { get; set; }
+    public decimal SaturatedFatG { get; set; }
+    public decimal TransFatG { get; set; }
+    public decimal CholesterolMg { get; set; }
+    public decimal CarbohydratesG { get; set; }
+    public decimal TotalSugarsG { get; set; }
+    public decimal AddedSugarsG { get; set; }
+    public decimal VitaminDMcg { get; set; }
+    public decimal IronMg { get; set; }
+    public decimal PotassiumMg { get; set; }
+}
+
+public sealed class RecipeAttachmentDto
+{
+    public int Id { get; set; }
+    public int RecipeId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public string FileKind { get; set; } = "supporting_document";
+    public long FileSize { get; set; }
+    public DateTime UploadedAt { get; set; }
 }
 
 public sealed class RecipeReviewCommentDto
@@ -115,6 +144,35 @@ public sealed class RecipeReviewCommentCreateRequest
     public string? TargetLabel { get; set; }
     public string? NutrientKey { get; set; }
     public string ReviewStatus { get; set; } = "open";
+}
+
+public sealed class HomeUpdateDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string UpdateType { get; set; } = "Announcement";
+    public string Summary { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public DateTime PublishedOn { get; set; }
+    public string? ImageSource { get; set; }
+}
+
+public sealed class HomeUpdateCreateRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string UpdateType { get; set; } = "Announcement";
+    public string Summary { get; set; } = string.Empty;
+    public string? Content { get; set; }
+    public DateTime PublishedOn { get; set; } = DateTime.Today;
+    public string? ImageSource { get; set; }
+}
+
+public sealed class RecipeHomeCategorySettingDto
+{
+    public string CategoryKey { get; set; } = string.Empty;
+    public bool IsVisible { get; set; }
+    public string? DisplayLabel { get; set; }
+    public string? Description { get; set; }
 }
 
 public sealed class MenuItemInput
@@ -173,6 +231,21 @@ public sealed class MenuCreateRequest
 public sealed class MenuCreateResponse
 {
     public int Id { get; set; }
+}
+
+public sealed class ResourceFileDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string ResourceType { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Audience { get; set; } = "Staff + Providers";
+    public DateTime LastUpdated { get; set; }
+    public string UploadedBy { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long FileSize { get; set; }
+    public DateTime UploadedAt { get; set; }
 }
 
 public sealed class MenuSummaryDto
@@ -282,6 +355,7 @@ public sealed class HistoricalMenuItemDto
 {
     public int RecipeId { get; set; }
     public int Position { get; set; }
+    public int DayIndex { get; set; }
     public string? MealSlot { get; set; }
     public string? ComponentKey { get; set; }
     public bool IsAlternate { get; set; }

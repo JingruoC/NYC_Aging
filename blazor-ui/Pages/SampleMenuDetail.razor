@@ -2,6 +2,8 @@
 @inject PythonApiClient Api
 @inject NavigationManager Navigation
 @inject MenuDraftService Drafts
+@inject AppModeService AppMode
+@inject PrintQueueService PrintQueue
 
 <div class="grid" style="gap: 18px">
     @if (SampleMenu is null)
@@ -24,7 +26,8 @@
                 </div>
                 <div class="hero-actions">
                     <a class="ghost-button" href="/menus/new/sample">Back to sample menus</a>
-                    <button type="button" class="button" @onclick="AddAsDraft">Use this sample</button>
+                    <button type="button" class="button" @onclick="AddAsDraft">Duplicate as new draft</button>
+                    <button type="button" class="ghost-button" @onclick="AddSampleToPrintQueue">Add to print queue</button>
                     <button type="button" class="ghost-button" @onclick="PrintMenu">View/Print Entire Menu</button>
                 </div>
             </div>
@@ -107,7 +110,7 @@
                                         <div class="scheduled-card">
                                             <div class="meal-badge">@component.Label.Substring(0, 1)</div>
                                             <strong>@item.Recipe.RecipeName</strong>
-                                            <span>@item.Recipe.Category · @item.Recipe.Calories kcal</span>
+                                            <span>@component.Label</span>
                                             <a class="ghost-button tiny-button" href="@($"/recipes/{item.RecipeId}")">View recipe</a>
                                         </div>
                                     }
@@ -141,11 +144,12 @@
 
     private HistoricalMenuDetailDto? SampleMenu { get; set; }
     private string? Message { get; set; }
-    private IEnumerable<LegacyMealComponent> VisibleSampleComponents =>
-        SampleMenu is null
-            ? []
-            : LegacyReferenceData.MealComponents
-                .Where(component => SampleMenu.Items.Any(item => NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category) == component.Key));
+    private static readonly SamplePreviewComponent[] VisibleSampleComponents =
+    [
+        new("entree", "Entrée", "Main dish"),
+        new("side", "Side", "Grain or side dish"),
+        new("vegetable", "Vegetable", "Vegetable component")
+    ];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -162,7 +166,9 @@
         Drafts.Set(new MenuCreateRequest
         {
             Name = SampleMenu.Name,
-            ContractName = string.Join(", ", SampleMenu.Contracts),
+            ContractName = CurrentRole == AppRole.Provider
+                ? AppMode.ProviderContract
+                : SampleMenu.Contracts.FirstOrDefault() ?? LegacyReferenceData.ContractNames[0],
             ProgramType = SampleMenu.ProgramType,
             MealType = SampleMenu.MealType,
             MenuCoverage = SampleMenu.MenuCoverage ?? $"{SampleMenu.MealType} only",
@@ -173,11 +179,13 @@
             Cycle = SampleMenu.Cycle,
             CycleStartDate = SampleMenu.ServiceDate,
             CycleEndDate = SampleMenu.ServiceDate.AddMonths(6),
-            Contracts = [.. SampleMenu.Contracts],
+            Contracts = CurrentRole == AppRole.Provider
+                ? [AppMode.ProviderContract]
+                : SampleMenu.Contracts.Count > 0 ? [.. SampleMenu.Contracts] : [LegacyReferenceData.ContractNames[0]],
             SampleMenuId = SampleMenu.Id,
             StartDate = SampleMenu.ServiceDate,
-            EndDate = SampleMenu.ServiceDate.AddDays(4),
-            DaysPerWeek = 5,
+            EndDate = SampleMenu.ServiceDate.AddDays(SampleMenu.DaysPerWeek - 1),
+            DaysPerWeek = SampleMenu.DaysPerWeek,
             CycleWeek = 1,
             Items = SampleMenu.Items
                 .OrderBy(item => item.Position)
@@ -185,9 +193,9 @@
                 {
                     RecipeId = item.RecipeId,
                     Position = index + 1,
-                    DayIndex = index / 3,
-                    MealSlot = $"{(SampleMenu.MealType ?? "Lunch").ToLowerInvariant()}_{(item.ComponentKey ?? item.MealSlot ?? "entree")}",
-                    ComponentKey = item.ComponentKey ?? item.MealSlot ?? "entree",
+                    DayIndex = item.DayIndex,
+                    MealSlot = BuildPlannerSlot(item, SampleMenu.MealType),
+                    ComponentKey = NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? "entree"),
                     IsAlternate = item.IsAlternate,
                     SourceType = "sample"
                 })
@@ -202,6 +210,18 @@
         Navigation.NavigateTo("/reports");
     }
 
+    private void AddSampleToPrintQueue()
+    {
+        if (SampleMenu is null)
+        {
+            return;
+        }
+
+        var detail = $"{SampleMenu.ProgramType} · {SampleMenu.MealType} · {SampleMenu.DaysPerWeek}-day sample";
+        var added = PrintQueue.Add("Sample menu", SampleMenu.Name, $"/sample-menus/{SampleMenu.Id}", detail);
+        Message = added ? "Sample menu added to the print queue." : "Sample menu is already in the print queue.";
+    }
+
     private static string NormalizeComponentKey(string componentKey) => componentKey.ToLowerInvariant() switch
     {
         "grain" => "grains",
@@ -213,6 +233,18 @@
         _ => componentKey.ToLowerInvariant()
     };
 
+    private static string BuildPlannerSlot(HistoricalMenuItemDto item, string? sampleMealType)
+    {
+        var mealSlot = string.IsNullOrWhiteSpace(item.MealSlot)
+            ? (sampleMealType ?? "Lunch").ToLowerInvariant()
+            : item.MealSlot.ToLowerInvariant();
+        var component = NormalizeComponentKey(item.ComponentKey ?? item.Recipe.Category ?? "entree");
+
+        return mealSlot.Contains('_', StringComparison.Ordinal)
+            ? mealSlot
+            : $"{mealSlot}_{component}";
+    }
+
     private IEnumerable<HistoricalMenuItemDto> ItemsForComponent(string componentKey, int dayIndex)
     {
         if (SampleMenu is null)
@@ -220,22 +252,25 @@
             return [];
         }
 
-        var matchingItems = SampleMenu.Items
-            .Where(item => NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category) == componentKey)
+        return SampleMenu.Items
+            .Where(item => item.DayIndex == dayIndex)
+            .Where(item => NormalizeSamplePreviewComponent(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category) == componentKey)
             .OrderBy(item => item.Position)
             .ToList();
-
-        if (matchingItems.Count == 0)
-        {
-            return [];
-        }
-
-        return [matchingItems[dayIndex % matchingItems.Count]];
     }
+
+    private static string NormalizeSamplePreviewComponent(string componentKey) => componentKey.ToLowerInvariant() switch
+    {
+        "grain" or "grains" or "side" => "side",
+        "main" => "entree",
+        _ => componentKey.ToLowerInvariant()
+    };
 
     private static DateTime SampleCalendarStart(HistoricalMenuDetailDto sample)
     {
         var daysSinceMonday = ((int)sample.ServiceDate.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
         return sample.ServiceDate.Date.AddDays(-daysSinceMonday);
     }
+
+    private readonly record struct SamplePreviewComponent(string Key, string Label, string Requirement);
 }

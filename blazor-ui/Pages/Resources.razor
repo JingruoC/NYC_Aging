@@ -1,4 +1,7 @@
 @page "/resources"
+@inject PrintQueueService PrintQueue
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
 
 <div class="grid resources-page" style="gap: 18px">
     <section class="section">
@@ -40,7 +43,7 @@
                 <div>
                     <h3 style="margin-bottom: 6px">Files</h3>
                 </div>
-                <InputText class="input compact-input resource-search" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search resources" />
+                <input class="input compact-input resource-search" @bind="SearchText" @bind:event="oninput" placeholder="Search resources" />
             </div>
 
             @if (IsAdmin)
@@ -103,7 +106,7 @@
                         <tr>
                             <th>Resource</th>
                             <th>Type / Audience</th>
-                            <th>Updated</th>
+                            <th><button type="button" class="sortable-column" @onclick="ToggleUpdatedSort">Updated @UpdatedSortIndicator</button></th>
                             <th>@(IsAdmin ? "Actions" : "Open")</th>
                         </tr>
                     </thead>
@@ -133,6 +136,11 @@
                                 <td>
                                     <div class="resource-table-actions">
                                         <button type="button" class="secondary-button tiny-button" @onclick="() => OpenResource(resource)">Open</button>
+                                        @if (resource.StoredId is int storedResourceId)
+                                        {
+                                            <a class="secondary-button tiny-button" href="@($"/downloads/resources/{storedResourceId}?download=true")">Download</a>
+                                        }
+                                        <button type="button" class="secondary-button tiny-button" @onclick="() => AddResourceToPrintQueue(resource)">Queue</button>
                                         @if (IsAdmin)
                                         {
                                             <button type="button" class="ghost-button tiny-button" @onclick="() => RemoveResource(resource)">Remove</button>
@@ -166,23 +174,41 @@
     private string NewResourceAudience { get; set; } = "Staff + Providers";
     private DateTime? NewResourceLastUpdated { get; set; } = DateTime.Today;
     private string NewResourceUploadedBy { get; set; } = "NYC Aging Nutrition Unit";
+    private IBrowserFile? NewResourceFile { get; set; }
     private string? Message { get; set; }
+    private bool UpdatedDescending { get; set; } = true;
     private bool IsAdmin => CurrentRole == AppRole.Admin;
     private static readonly string[] ResourceAudienceOptions = ["Staff", "Providers", "Staff + Providers"];
 
-    private IEnumerable<LegacyResourceItem> VisibleResources =>
-        ResourceItems
-            .Where(resource => SelectedResourceType == AllMode || resource.ResourceType.Equals(SelectedResourceType, StringComparison.OrdinalIgnoreCase))
-            .Where(resource => string.IsNullOrWhiteSpace(SearchText)
-                || resource.Title.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
-                || resource.ResourceType.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
-                || resource.Description.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
-                || resource.Audience.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
-                || resource.UploadedBy.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
-                || FormatResourceDate(resource.LastUpdated).Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase))
-            .OrderBy(resource => resource.ResourceType)
-            .ThenByDescending(resource => resource.LastUpdated ?? DateTime.MinValue)
-            .ThenBy(resource => resource.Title);
+    protected override async Task OnInitializedAsync()
+    {
+        var storedResources = await Api.GetResourceFilesAsync();
+        ResourceItems.AddRange(storedResources.Select(ToLegacyResourceItem));
+    }
+
+    private IEnumerable<LegacyResourceItem> VisibleResources
+    {
+        get
+        {
+            var matches = ResourceItems
+                .Where(resource => SelectedResourceType == AllMode || resource.ResourceType.Equals(SelectedResourceType, StringComparison.OrdinalIgnoreCase))
+                .Where(resource => string.IsNullOrWhiteSpace(SearchText)
+                    || resource.Title.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || resource.ResourceType.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || resource.Description.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || resource.Audience.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || resource.UploadedBy.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || FormatResourceDate(resource.LastUpdated).Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            return UpdatedDescending
+                ? matches.OrderByDescending(resource => resource.LastUpdated ?? DateTime.MinValue).ThenBy(resource => resource.Title)
+                : matches.OrderBy(resource => resource.LastUpdated ?? DateTime.MinValue).ThenBy(resource => resource.Title);
+        }
+    }
+
+    private string UpdatedSortIndicator => UpdatedDescending ? "↓" : "↑";
+
+    private void ToggleUpdatedSort() => UpdatedDescending = !UpdatedDescending;
 
     private void SelectResourceType(string type)
     {
@@ -192,14 +218,15 @@
 
     private void OnFileSelected(InputFileChangeEventArgs args)
     {
-        NewResourcePath = args.File.Name;
+        NewResourceFile = args.File;
+        NewResourcePath = NewResourceFile.Name;
         if (string.IsNullOrWhiteSpace(NewResourceTitle))
         {
             NewResourceTitle = Path.GetFileNameWithoutExtension(args.File.Name);
         }
     }
 
-    private void AddResource()
+    private async Task AddResource()
     {
         if (string.IsNullOrWhiteSpace(NewResourceTitle))
         {
@@ -207,23 +234,30 @@
             return;
         }
 
-        var path = string.IsNullOrWhiteSpace(NewResourcePath) ? "~/Resource/new-resource.pdf" : $"~/Resource/{NewResourcePath}";
+        if (NewResourceFile is null)
+        {
+            Message = "Choose a file before adding the resource.";
+            return;
+        }
+
         var description = string.IsNullOrWhiteSpace(NewResourceDescription)
             ? "Staff-uploaded reference file awaiting a final description."
             : NewResourceDescription.Trim();
-        ResourceItems.Add(new LegacyResourceItem(
+        var stored = await Api.UploadResourceFileAsync(
             NewResourceTitle.Trim(),
             NewResourceType,
-            path,
             description,
-            NewResourceLastUpdated,
             NewResourceAudience,
-            string.IsNullOrWhiteSpace(NewResourceUploadedBy) ? "NYC Aging Nutrition Unit" : NewResourceUploadedBy.Trim()));
+            NewResourceLastUpdated ?? DateTime.Today,
+            string.IsNullOrWhiteSpace(NewResourceUploadedBy) ? "NYC Aging Nutrition Unit" : NewResourceUploadedBy.Trim(),
+            NewResourceFile);
+        ResourceItems.Add(ToLegacyResourceItem(stored));
         SelectedResourceType = NewResourceType;
         Message = $"{NewResourceTitle} added to {NewResourceType}.";
         NewResourceTitle = string.Empty;
         NewResourceDescription = string.Empty;
         NewResourcePath = string.Empty;
+        NewResourceFile = null;
         NewResourceAudience = "Staff + Providers";
         NewResourceLastUpdated = DateTime.Today;
         NewResourceUploadedBy = "NYC Aging Nutrition Unit";
@@ -231,14 +265,44 @@
 
     private void OpenResource(LegacyResourceItem resource)
     {
-        Message = $"Selected: {resource.Title}.";
+        if (resource.StoredId is int resourceId)
+        {
+            Navigation.NavigateTo($"/downloads/resources/{resourceId}?download=false", forceLoad: true);
+            return;
+        }
+
+        Message = $"{resource.Title} is a reference-only mock record. Upload the source file to enable Open and Download.";
     }
 
-    private void RemoveResource(LegacyResourceItem resource)
+    private void AddResourceToPrintQueue(LegacyResourceItem resource)
     {
+        var resourceUrl = resource.StoredId is int resourceId
+            ? $"/downloads/resources/{resourceId}?download=false"
+            : $"/resources?file={Uri.EscapeDataString(resource.Title)}";
+        var added = PrintQueue.Add("Resource", resource.Title, resourceUrl, $"{resource.ResourceType} · Updated {FormatResourceDate(resource.LastUpdated)}");
+        Message = added ? $"{resource.Title} added to the print queue." : $"{resource.Title} is already in the print queue.";
+    }
+
+    private async Task RemoveResource(LegacyResourceItem resource)
+    {
+        if (resource.StoredId is int resourceId)
+        {
+            await Api.DeleteResourceFileAsync(resourceId);
+        }
         ResourceItems.Remove(resource);
         Message = $"{resource.Title} removed from the visible resource list.";
     }
+
+    private static LegacyResourceItem ToLegacyResourceItem(ResourceFileDto resource) => new(
+        resource.Title,
+        resource.ResourceType,
+        $"/downloads/resources/{resource.Id}",
+        resource.Description,
+        resource.LastUpdated,
+        resource.Audience,
+        resource.UploadedBy,
+        resource.Id,
+        resource.FileName);
 
     private static string FormatResourceDate(DateTime? date) =>
         date?.ToString("MMM d, yyyy") ?? "Not recorded";

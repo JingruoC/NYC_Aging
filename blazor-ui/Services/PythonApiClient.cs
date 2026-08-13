@@ -1,11 +1,14 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.AspNetCore.Components.Forms;
 using NycAging.Web.Models;
 
 namespace NycAging.Web.Services;
 
 public sealed class PythonApiClient
 {
+    public const long MaxAttachmentBytes = 20 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -26,6 +29,50 @@ public sealed class PythonApiClient
         return await _http.GetFromJsonAsync<List<RecipeDto>>(path, JsonOptions) ?? [];
     }
 
+    public async Task<List<HomeUpdateDto>> GetHomeUpdatesAsync()
+    {
+        return await _http.GetFromJsonAsync<List<HomeUpdateDto>>("/home-updates", JsonOptions) ?? [];
+    }
+
+    public async Task<HomeUpdateDto?> GetHomeUpdateAsync(int updateId)
+    {
+        var response = await _http.GetAsync($"/home-updates/{updateId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HomeUpdateDto>(JsonOptions);
+    }
+
+    public async Task<HomeUpdateDto> CreateHomeUpdateAsync(HomeUpdateCreateRequest update)
+    {
+        var response = await _http.PostAsJsonAsync("/home-updates", update, JsonOptions);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HomeUpdateDto>(JsonOptions) ?? new HomeUpdateDto();
+    }
+
+    public async Task<List<RecipeHomeCategorySettingDto>> GetRecipeHomeCategorySettingsAsync()
+    {
+        return await _http.GetFromJsonAsync<List<RecipeHomeCategorySettingDto>>("/recipe-home-categories", JsonOptions) ?? [];
+    }
+
+    public async Task<RecipeHomeCategorySettingDto> UpdateRecipeHomeCategorySettingAsync(
+        string categoryKey,
+        bool isVisible,
+        string? displayLabel = null,
+        string? description = null)
+    {
+        var key = Uri.EscapeDataString(categoryKey);
+        var response = await _http.PutAsJsonAsync(
+            $"/recipe-home-categories/{key}",
+            new { is_visible = isVisible, display_label = displayLabel, description },
+            JsonOptions);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<RecipeHomeCategorySettingDto>(JsonOptions) ?? new RecipeHomeCategorySettingDto();
+    }
+
     public async Task<List<RecipeDto>> SearchRecipesAsync(string query)
     {
         var encoded = Uri.EscapeDataString(query ?? string.Empty);
@@ -35,6 +82,57 @@ public sealed class PythonApiClient
     public async Task<RecipeDto?> GetRecipeAsync(int recipeId)
     {
         return await _http.GetFromJsonAsync<RecipeDto>($"/recipes/{recipeId}", JsonOptions);
+    }
+
+    public async Task<List<ResourceFileDto>> GetResourceFilesAsync()
+    {
+        return await _http.GetFromJsonAsync<List<ResourceFileDto>>("/resources", JsonOptions) ?? [];
+    }
+
+    public async Task<ResourceFileDto> UploadResourceFileAsync(
+        string title,
+        string resourceType,
+        string description,
+        string audience,
+        DateTime lastUpdated,
+        string uploadedBy,
+        IBrowserFile file)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(title), "title");
+        form.Add(new StringContent(resourceType), "resource_type");
+        form.Add(new StringContent(description), "description");
+        form.Add(new StringContent(audience), "audience");
+        form.Add(new StringContent(lastUpdated.ToString("yyyy-MM-dd")), "last_updated");
+        form.Add(new StringContent(uploadedBy), "uploaded_by");
+
+        await using var stream = file.OpenReadStream(MaxAttachmentBytes);
+        using var fileContent = new StreamContent(stream);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(file.ContentType ?? "application/octet-stream");
+        form.Add(fileContent, "file", file.Name);
+
+        var response = await _http.PostAsync("/resources", form);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ResourceFileDto>(JsonOptions) ?? new ResourceFileDto();
+    }
+
+    public async Task<FileDownload> DownloadResourceFileAsync(int resourceId, bool download)
+    {
+        var response = await _http.GetAsync($"/resources/{resourceId}/file?download={download.ToString().ToLowerInvariant()}");
+        response.EnsureSuccessStatusCode();
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName
+            ?? $"resource-{resourceId}";
+        return new FileDownload(
+            await response.Content.ReadAsByteArrayAsync(),
+            response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+            fileName.Trim('"'));
+    }
+
+    public async Task DeleteResourceFileAsync(int resourceId)
+    {
+        var response = await _http.DeleteAsync($"/resources/{resourceId}");
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<RecipeDto> CreateRecipeAsync(RecipeCreateRequest recipe)
@@ -49,6 +147,51 @@ public sealed class PythonApiClient
         var response = await _http.PutAsJsonAsync($"/recipes/{recipeId}", recipe, JsonOptions);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<RecipeDto>(JsonOptions) ?? recipe;
+    }
+
+    public async Task<List<RecipeAttachmentDto>> GetRecipeAttachmentsAsync(int recipeId)
+    {
+        return await _http.GetFromJsonAsync<List<RecipeAttachmentDto>>($"/recipes/{recipeId}/attachments", JsonOptions) ?? [];
+    }
+
+    public async Task<RecipeAttachmentDto> UploadRecipeAttachmentAsync(int recipeId, string fileKind, IBrowserFile file)
+    {
+        using var form = new MultipartFormDataContent();
+        await using var stream = file.OpenReadStream(MaxAttachmentBytes);
+        using var fileContent = new StreamContent(stream);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(file.ContentType ?? "application/octet-stream");
+        form.Add(fileContent, "file", file.Name);
+        var kind = Uri.EscapeDataString(fileKind);
+        var response = await _http.PostAsync($"/recipes/{recipeId}/attachments?file_kind={kind}", form);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<RecipeAttachmentDto>(JsonOptions) ?? new RecipeAttachmentDto();
+    }
+
+    public async Task<FileDownload> DownloadRecipeAttachmentAsync(int recipeId, int attachmentId, bool download)
+    {
+        var response = await _http.GetAsync($"/recipes/{recipeId}/attachments/{attachmentId}?download={download.ToString().ToLowerInvariant()}");
+        response.EnsureSuccessStatusCode();
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName
+            ?? $"recipe-{recipeId}-attachment";
+        return new FileDownload(
+            await response.Content.ReadAsByteArrayAsync(),
+            response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+            fileName.Trim('"'));
+    }
+
+    public async Task<FileDownload> DownloadRecipeExportAsync(int recipeId, string exportType)
+    {
+        var safeType = exportType.Equals("nutrition", StringComparison.OrdinalIgnoreCase) ? "nutrition" : "submission";
+        var response = await _http.GetAsync($"/recipes/{recipeId}/export/{safeType}.xlsx");
+        response.EnsureSuccessStatusCode();
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName
+            ?? $"recipe-{recipeId}-{safeType}.xlsx";
+        return new FileDownload(
+            await response.Content.ReadAsByteArrayAsync(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName.Trim('"'));
     }
 
     public async Task<List<RecipeReviewCommentDto>> GetRecipeCommentsAsync(int recipeId)
@@ -144,3 +287,5 @@ public sealed class PythonApiClient
         return await _http.GetFromJsonAsync<AnalyticsDto>("/analytics", JsonOptions) ?? new AnalyticsDto();
     }
 }
+
+public sealed record FileDownload(byte[] Bytes, string ContentType, string FileName);

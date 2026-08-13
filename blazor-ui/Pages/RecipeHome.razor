@@ -19,11 +19,36 @@
                 <div class="eyebrow">Our Recipes</div>
                 <h3 style="margin-bottom: 6px">Recipe categories</h3>
             </div>
+            @if (IsAdmin)
+            {
+                <details class="inline-settings-details">
+                    <summary>Choose displayed categories</summary>
+                    <div class="category-visibility-panel">
+                        @foreach (var category in AllCategories)
+                        {
+                            <label class="checkbox-pill">
+                                <input type="checkbox" checked="@SelectedCategoryKeys.Contains(category.Key)" @onchange="args => SetCategoryVisible(category.Key, args)" />
+                                <span>@category.Label</span>
+                            </label>
+                        }
+                    </div>
+                    <div class="category-add-panel">
+                        <strong>Add a category</strong>
+                        <InputText class="input compact-input" @bind-Value="NewCategoryLabel" placeholder="Category name" />
+                        <InputText class="input compact-input" @bind-Value="NewCategoryDescription" placeholder="One-line description" />
+                        <button type="button" class="secondary-button" @onclick="AddCategory" disabled="@string.IsNullOrWhiteSpace(NewCategoryLabel)">Add category</button>
+                        @if (!string.IsNullOrWhiteSpace(CategoryMessage))
+                        {
+                            <span class="small muted">@CategoryMessage</span>
+                        }
+                    </div>
+                </details>
+            }
         </div>
         <div class="legacy-tile-grid">
-            @foreach (var tile in LegacyReferenceData.RecipeTiles)
+            @foreach (var tile in DisplayedCategories)
             {
-                <a class="legacy-tile link-card" href="@($"/recipes?legacy={Uri.EscapeDataString(tile.FilterValue)}")">
+                <a class="legacy-tile link-card" href="@CategoryHref(tile)">
                     <span class="legacy-tile-head">
                         <span class="legacy-tile-mark">@tile.Label.Substring(0, 1)</span>
                         <strong>@tile.Label</strong>
@@ -65,7 +90,7 @@
                 <h3 style="margin-bottom: 6px">Frequently used approved recipes</h3>
             </div>
             <div class="hero-actions">
-                @if (AppMode.IsAdmin)
+                @if (IsAdmin)
                 {
                     <span class="status-badge warn">@PendingReviewCount pending review</span>
                 }
@@ -96,10 +121,102 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private AppRole CurrentRole { get; set; } = AppRole.Admin;
+
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+
     private List<RecipeDto> Recipes { get; set; } = [];
 
+    private static readonly IReadOnlyList<RecipeHomeCategory> AvailableCategories =
+    [
+        new("breakfast", "Breakfast", "Morning recipes and breakfast meal components."),
+        new("appetizer", "Appetizers", "Optional starters and small menu items."),
+        new("entree", "Entrees", "Main dishes, proteins, and plant-based entrees."),
+        new("side", "Sides", "Prepared side dishes and supporting meal items."),
+        new("grain", "Grains", "Whole grains, rolls, rice, pasta, and cereal items."),
+        new("vegetable", "Vegetables", "Starchy and non-starchy vegetable recipes."),
+        new("fruit", "Fruit", "Fresh, frozen, canned, and prepared fruit items."),
+        new("milk", "Milk / Yogurt", "Dairy milk, yogurt, and approved equivalents."),
+        new("dairy-free", "Dairy-Free", "Non-dairy equivalents and dairy-free recipes."),
+        new("condiments", "Condiments", "Optional sauces, dressings, and condiments."),
+        new("juice", "Juice / Dessert", "Optional juice and dessert items."),
+        new("plant-based", "Plant-Based", "Plant-based entrees, features, and proteins.")
+    ];
+
+    private HashSet<string> SelectedCategoryKeys { get; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "breakfast", "entree", "side", "grain", "vegetable", "fruit", "milk", "plant-based"
+    };
+
+    private List<RecipeHomeCategory> CustomCategories { get; } = [];
+    private string NewCategoryLabel { get; set; } = string.Empty;
+    private string NewCategoryDescription { get; set; } = string.Empty;
+    private string? CategoryMessage { get; set; }
+
+    private IEnumerable<RecipeHomeCategory> AllCategories => AvailableCategories
+        .Concat(CustomCategories)
+        .GroupBy(category => category.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(group => group.First());
+
+    private IEnumerable<RecipeHomeCategory> DisplayedCategories =>
+        AllCategories.Where(category => SelectedCategoryKeys.Contains(category.Key));
+
+    private static string CategoryHref(RecipeHomeCategory category) => category.Key switch
+    {
+        "breakfast" => "/recipes?meal=breakfast",
+        "appetizer" => $"/recipes?legacy={Uri.EscapeDataString("Appetizer")}",
+        "dairy-free" => $"/recipes?legacy={Uri.EscapeDataString("Dairy-Free")}",
+        "condiments" => $"/recipes?legacy={Uri.EscapeDataString("Condiments")}",
+        "juice" => $"/recipes?legacy={Uri.EscapeDataString("Juice or Dessert")}",
+        "plant-based" => $"/recipes?legacy={Uri.EscapeDataString("Plant-Based Entree")}",
+        _ => $"/recipes?category={Uri.EscapeDataString(category.Key)}"
+    };
+
+    private async Task SetCategoryVisible(string key, ChangeEventArgs args)
+    {
+        var selected = args.Value is true || args.Value?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+        if (selected)
+        {
+            SelectedCategoryKeys.Add(key);
+        }
+        else
+        {
+            SelectedCategoryKeys.Remove(key);
+        }
+
+        var category = AllCategories.FirstOrDefault(category => category.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        await Api.UpdateRecipeHomeCategorySettingAsync(key, selected, category?.Label, category?.Description);
+    }
+
+    private async Task AddCategory()
+    {
+        var label = NewCategoryLabel.Trim();
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        var key = Slugify(label);
+        if (AllCategories.Any(category => category.Key.Equals(key, StringComparison.OrdinalIgnoreCase)))
+        {
+            CategoryMessage = $"{label} is already available.";
+            return;
+        }
+
+        var description = string.IsNullOrWhiteSpace(NewCategoryDescription)
+            ? $"Approved {label.ToLowerInvariant()} recipes."
+            : NewCategoryDescription.Trim();
+        CustomCategories.Add(new RecipeHomeCategory(key, label, description));
+        SelectedCategoryKeys.Add(key);
+        await Api.UpdateRecipeHomeCategorySettingAsync(key, true, label, description);
+        NewCategoryLabel = string.Empty;
+        NewCategoryDescription = string.Empty;
+        CategoryMessage = $"Added {label}.";
+    }
+
     private IEnumerable<RecipeDto> FeaturedRecipes => Recipes
-        .Where(recipe => recipe.IsApproved && !recipe.IsDead)
+        .Where(recipe => recipe.IsApproved && !recipe.IsDead && (IsAdmin || recipe.IsPublic))
         .OrderByDescending(recipe => recipe.IsFavorite)
         .ThenBy(recipe => recipe.RecipeName)
         .Take(8);
@@ -109,6 +226,35 @@
     protected override async Task OnInitializedAsync()
     {
         Recipes = await Api.GetRecipesAsync();
+        var settings = await Api.GetRecipeHomeCategorySettingsAsync();
+        if (settings.Any())
+        {
+            SelectedCategoryKeys.Clear();
+            foreach (var setting in settings.Where(setting => setting.IsVisible))
+            {
+                SelectedCategoryKeys.Add(setting.CategoryKey);
+            }
+            foreach (var setting in settings.Where(setting => !string.IsNullOrWhiteSpace(setting.DisplayLabel)))
+            {
+                if (AvailableCategories.Any(category => category.Key.Equals(setting.CategoryKey, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                CustomCategories.Add(new RecipeHomeCategory(
+                    setting.CategoryKey,
+                    setting.DisplayLabel!,
+                    setting.Description ?? $"Approved {setting.DisplayLabel!.ToLowerInvariant()} recipes."));
+            }
+        }
+    }
+
+    private static string Slugify(string value)
+    {
+        var characters = value.ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : '-')
+            .ToArray();
+        return string.Join('-', new string(characters).Split('-', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private static string DisplayCategory(string value) => value switch
@@ -131,4 +277,6 @@
         "snack" => "Snack",
         _ => string.IsNullOrWhiteSpace(value) ? "Meal" : char.ToUpperInvariant(value[0]) + value[1..]
     };
+
+    private sealed record RecipeHomeCategory(string Key, string Label, string Description);
 }

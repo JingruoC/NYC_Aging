@@ -51,9 +51,29 @@ def ensure_sqlite_schema() -> None:
             ("nutrient_claims", "ALTER TABLE recipes ADD COLUMN nutrient_claims JSON NOT NULL DEFAULT '[]'"),
             ("vitamin_c_mg", "ALTER TABLE recipes ADD COLUMN vitamin_c_mg FLOAT NOT NULL DEFAULT 0"),
             ("calcium_mg", "ALTER TABLE recipes ADD COLUMN calcium_mg FLOAT NOT NULL DEFAULT 0"),
+            ("saturated_fat_g", "ALTER TABLE recipes ADD COLUMN saturated_fat_g FLOAT NOT NULL DEFAULT 0"),
+            ("trans_fat_g", "ALTER TABLE recipes ADD COLUMN trans_fat_g FLOAT NOT NULL DEFAULT 0"),
+            ("cholesterol_mg", "ALTER TABLE recipes ADD COLUMN cholesterol_mg FLOAT NOT NULL DEFAULT 0"),
+            ("carbohydrates_g", "ALTER TABLE recipes ADD COLUMN carbohydrates_g FLOAT NOT NULL DEFAULT 0"),
+            ("total_sugars_g", "ALTER TABLE recipes ADD COLUMN total_sugars_g FLOAT NOT NULL DEFAULT 0"),
+            ("added_sugars_g", "ALTER TABLE recipes ADD COLUMN added_sugars_g FLOAT NOT NULL DEFAULT 0"),
+            ("vitamin_d_mcg", "ALTER TABLE recipes ADD COLUMN vitamin_d_mcg FLOAT NOT NULL DEFAULT 0"),
+            ("iron_mg", "ALTER TABLE recipes ADD COLUMN iron_mg FLOAT NOT NULL DEFAULT 0"),
+            ("potassium_mg", "ALTER TABLE recipes ADD COLUMN potassium_mg FLOAT NOT NULL DEFAULT 0"),
         ]
         with engine.begin() as conn:
             for column_name, ddl in recipe_alterations:
+                if column_name not in existing_columns:
+                    conn.execute(text(ddl))
+
+    if "recipe_home_category_settings" in existing_tables:
+        existing_columns = {column["name"] for column in inspector.get_columns("recipe_home_category_settings")}
+        category_setting_alterations = [
+            ("display_label", "ALTER TABLE recipe_home_category_settings ADD COLUMN display_label VARCHAR(150)"),
+            ("description", "ALTER TABLE recipe_home_category_settings ADD COLUMN description TEXT"),
+        ]
+        with engine.begin() as conn:
+            for column_name, ddl in category_setting_alterations:
                 if column_name not in existing_columns:
                     conn.execute(text(ddl))
 
@@ -142,5 +162,18 @@ def ensure_sqlite_schema() -> None:
         ]
         with engine.begin() as conn:
             for column_name, ddl in historical_menu_alterations:
+                if column_name not in existing_columns:
+                    conn.execute(text(ddl))
+
+    if "historical_menu_items" in existing_tables:
+        existing_columns = {column["name"] for column in inspector.get_columns("historical_menu_items")}
+        historical_item_alterations = [
+            ("day_index", "ALTER TABLE historical_menu_items ADD COLUMN day_index INTEGER NOT NULL DEFAULT 0"),
+            ("component_key", "ALTER TABLE historical_menu_items ADD COLUMN component_key VARCHAR(50)"),
+            ("is_alternate", "ALTER TABLE historical_menu_items ADD COLUMN is_alternate BOOLEAN NOT NULL DEFAULT 0"),
+            ("source_type", "ALTER TABLE historical_menu_items ADD COLUMN source_type VARCHAR(50) NOT NULL DEFAULT 'sample'"),
+        ]
+        with engine.begin() as conn:
+            for column_name, ddl in historical_item_alterations:
                 if column_name not in existing_columns:
                     conn.execute(text(ddl))

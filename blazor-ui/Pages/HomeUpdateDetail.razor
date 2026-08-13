@@ -1,0 +1,45 @@
+@page "/updates/{UpdateId:int}"
+@inject PythonApiClient Api
+
+@if (Update is null)
+{
+    <section class="section">
+        <div class="empty-state">
+            <strong>Update not found</strong>
+            <p class="muted">This story or announcement is no longer available.</p>
+            <a class="ghost-button" href="/">Back to Home</a>
+        </div>
+    </section>
+}
+else
+{
+    <article class="section home-article-page">
+        <div class="home-article-header">
+            <div>
+        <div class="eyebrow">@Update.UpdateType</div>
+                <h1>@Update.Title</h1>
+                <p class="muted">Published @Update.PublishedOn.ToString("MMMM d, yyyy")</p>
+            </div>
+            <a class="ghost-button" href="/">Back to Home</a>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Update.ImageSource))
+        {
+            <img src="@Update.ImageSource" alt="" class="home-article-image" />
+        }
+
+        <p class="home-article-summary">@Update.Summary</p>
+        <div class="home-article-body">@Update.Content</div>
+    </article>
+}
+
+@code {
+    [Parameter] public int UpdateId { get; set; }
+
+    private HomeUpdateDto? Update { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Update = await Api.GetHomeUpdateAsync(UpdateId);
+    }
+}

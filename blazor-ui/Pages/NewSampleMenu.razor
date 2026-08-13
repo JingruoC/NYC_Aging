@@ -29,7 +29,7 @@
                 <div class="eyebrow">Sample Menus</div>
                 <h3 style="margin-bottom: 6px">Sample menu list</h3>
             </div>
-            <InputText class="input compact-input resource-search" @bind-Value="SampleSearchText" @bind-Value:event="oninput" placeholder="Search sample menus" />
+            <input class="input compact-input resource-search" @bind="SampleSearchText" @bind:event="oninput" placeholder="Search sample menus" />
         </div>
 
         <div class="report-form compact-form" style="margin-top: 12px">
@@ -85,7 +85,7 @@
                                             <button type="button" class="ghost-button tiny-button" @onclick="() => EditSample(sample)">Edit</button>
                                             <button type="button" class="ghost-button tiny-button" @onclick="() => DeleteSample(sample)">Delete</button>
                                         }
-                                        <button type="button" class="button tiny-button" @onclick="() => UseSample(sample.Id)">Use</button>
+                                        <button type="button" class="button tiny-button" @onclick="() => UseSample(sample.Id)">Duplicate as draft</button>
                                     </div>
                                 </td>
                             </tr>
@@ -107,7 +107,7 @@
                             <h3 style="margin-bottom: 6px">@previewSample.Name</h3>
                             <p class="muted" style="margin: 0">@previewSample.ProgramType · @previewSample.MealType · @previewSample.DietType</p>
                         </div>
-                        <button type="button" class="button tiny-button" @onclick="() => UseSample(previewSample.Id)">Use</button>
+                        <button type="button" class="button tiny-button" @onclick="() => UseSample(previewSample.Id)">Duplicate as draft</button>
                     </div>
                     <div class="sample-mini-calendar sample-preview-calendar" style="grid-template-columns: repeat(@previewSample.DaysPerWeek, minmax(150px, 1fr))">
                         @for (var dayIndex = 0; dayIndex < previewSample.DaysPerWeek; dayIndex++)
@@ -117,9 +117,9 @@
                                 <div class="sample-mini-day-label">@day.ToString("ddd").ToUpperInvariant()</div>
                                 <strong>@day.ToString("MMM d")</strong>
                                 <div class="sample-mini-recipes">
-                                    @foreach (var recipeName in SamplePreviewRecipes(previewSample, dayIndex))
+                                    @foreach (var recipeLine in SamplePreviewRecipes(dayIndex))
                                     {
-                                        <span>@recipeName</span>
+                                        <span>@recipeLine</span>
                                     }
                                 </div>
                             </div>
@@ -223,6 +223,7 @@
     private string SampleDietFilter { get; set; } = AllMode;
     private string SampleSearchText { get; set; } = string.Empty;
     private string? Message { get; set; }
+    private HistoricalMenuDetailDto? PreviewSampleDetail { get; set; }
     private bool IsAdmin => CurrentRole == AppRole.Admin;
     private bool IsProvider => CurrentRole == AppRole.Provider;
 
@@ -257,28 +258,47 @@
 
     private static DateTime SampleCalendarStart(HistoricalMenuSummaryDto sample) => StartOfServiceWeek(sample.ServiceDate);
 
-    private static IEnumerable<string> SamplePreviewRecipes(HistoricalMenuSummaryDto sample, int dayIndex)
+    private IEnumerable<string> SamplePreviewRecipes(int dayIndex)
     {
-        if (sample.RecipeNames.Count == 0)
+        if (PreviewSampleDetail is null)
         {
-            return ["No recipes listed"];
+            return ["Loading preview..."];
         }
 
-        return sample.RecipeNames
-            .Skip(dayIndex % sample.RecipeNames.Count)
-            .Concat(sample.RecipeNames)
-            .Take(Math.Min(4, sample.RecipeNames.Count));
+        var previewComponents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["entree"] = "Entrée",
+            ["grains"] = "Side",
+            ["vegetable"] = "Vegetable"
+        };
+        var lines = PreviewSampleDetail.Items
+            .Where(item => item.DayIndex == dayIndex)
+            .Select(item => new
+            {
+                Item = item,
+                Component = NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? item.Recipe.Category)
+            })
+            .Where(item => previewComponents.ContainsKey(item.Component))
+            .OrderBy(item => Array.IndexOf(["entree", "grains", "vegetable"], item.Component))
+            .Select(item => $"{previewComponents[item.Component]}: {item.Item.Recipe.RecipeName}")
+            .ToList();
+        return lines.Count > 0 ? lines : ["No entrée, side, or vegetable listed"];
     }
 
     protected override async Task OnInitializedAsync()
     {
         SampleMenus = await Api.GetSampleMenusAsync();
         SelectedSampleId = SampleMenus.FirstOrDefault()?.Id ?? 0;
+        if (SelectedSampleId != 0)
+        {
+            PreviewSampleDetail = await Api.GetSampleMenuAsync(SelectedSampleId);
+        }
     }
 
-    private void SelectSample(HistoricalMenuSummaryDto sample)
+    private async Task SelectSample(HistoricalMenuSummaryDto sample)
     {
         SelectedSampleId = sample.Id;
+        PreviewSampleDetail = await Api.GetSampleMenuAsync(sample.Id);
         Message = null;
     }
 
@@ -311,8 +331,8 @@
             NutritionAdvisor = LegacyReferenceData.NutritionAdvisors[0],
             CreatedBy = IsProvider ? AppMode.ProviderContract : "Menu staff",
             StartDate = StartDate,
-            EndDate = StartDate.AddDays(4),
-            DaysPerWeek = 5,
+            EndDate = StartDate.AddDays((sample?.DaysPerWeek ?? 5) - 1),
+            DaysPerWeek = sample?.DaysPerWeek ?? 5,
             CycleWeek = 1,
             SampleMenuId = SelectedSampleId == 0 ? null : SelectedSampleId,
             Contracts = IsProvider
@@ -323,8 +343,10 @@
             {
                 RecipeId = item.RecipeId,
                 Position = index + 1,
-                DayIndex = index % 5,
-                MealSlot = $"{(sample.MealType ?? MealType).ToLowerInvariant()}_{NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? "entree")}",
+                DayIndex = item.DayIndex,
+                MealSlot = string.IsNullOrWhiteSpace(item.MealSlot)
+                    ? $"{(sample.MealType ?? MealType).ToLowerInvariant()}_{NormalizeComponentKey(item.ComponentKey ?? "entree")}"
+                    : item.MealSlot,
                 ComponentKey = NormalizeComponentKey(item.ComponentKey ?? item.MealSlot ?? "entree"),
                 SourceType = "sample"
             }).ToList() ?? []

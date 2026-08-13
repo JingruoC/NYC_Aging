@@ -294,4 +294,6 @@ public sealed record LegacyResourceItem(
     string Description = "",
     DateTime? LastUpdated = null,
     string Audience = "Staff + Providers",
-    string UploadedBy = "NYC Aging Nutrition Unit");
+    string UploadedBy = "NYC Aging Nutrition Unit",
+    int? StoredId = null,
+    string? FileName = null);

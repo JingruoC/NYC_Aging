@@ -47,6 +47,15 @@ def _recipe_dict(recipe: Recipe) -> dict:
         "nutrient_claims": getattr(recipe, "nutrient_claims", None) or [],
         "vitamin_c_mg": getattr(recipe, "vitamin_c_mg", None) or 0,
         "calcium_mg": getattr(recipe, "calcium_mg", None) or 0,
+        "saturated_fat_g": getattr(recipe, "saturated_fat_g", None) or 0,
+        "trans_fat_g": getattr(recipe, "trans_fat_g", None) or 0,
+        "cholesterol_mg": getattr(recipe, "cholesterol_mg", None) or 0,
+        "carbohydrates_g": getattr(recipe, "carbohydrates_g", None) or 0,
+        "total_sugars_g": getattr(recipe, "total_sugars_g", None) or 0,
+        "added_sugars_g": getattr(recipe, "added_sugars_g", None) or 0,
+        "vitamin_d_mcg": getattr(recipe, "vitamin_d_mcg", None) or 0,
+        "iron_mg": getattr(recipe, "iron_mg", None) or 0,
+        "potassium_mg": getattr(recipe, "potassium_mg", None) or 0,
     }
 
 
@@ -295,12 +304,27 @@ def analyze_menu(
     grouped = _menu_item_records(chosen, menu_items)
     selected_ids = {recipe.recipe_id for recipe in chosen}
 
+    planned_days: set[int] = set()
+    meal_days: dict[str, set[int]] = {"breakfast": set(), "lunch": set(), "dinner": set()}
+    for item in menu_items or []:
+        day_index = item.get("day_index") if isinstance(item, dict) else getattr(item, "day_index", None)
+        meal_slot = (item.get("meal_slot") if isinstance(item, dict) else getattr(item, "meal_slot", None)) or ""
+        meal_key = meal_slot.lower().split("_", 1)[0]
+        if day_index is None:
+            continue
+        planned_days.add(day_index)
+        if meal_key in meal_days:
+            meal_days[meal_key].add(day_index)
+
+    service_day_count = max(len(planned_days), 1)
+    planned_meal_count = max(sum(len(days) for days in meal_days.values()), 1)
+
     totals = {
-        "calories": round(sum(r.calories for r in chosen), 1),
-        "sodium_mg": round(sum(r.sodium_mg for r in chosen), 1),
-        "protein_g": round(sum(r.protein_g for r in chosen), 1),
-        "fiber_g": round(sum(r.fiber_g for r in chosen), 1),
-        "fat_g": round(sum(r.fat_g for r in chosen), 1),
+        "calories": round(sum(r.calories for r in chosen) / planned_meal_count, 1),
+        "sodium_mg": round(sum(r.sodium_mg for r in chosen) / planned_meal_count, 1),
+        "protein_g": round(sum(r.protein_g for r in chosen) / planned_meal_count, 1),
+        "fiber_g": round(sum(r.fiber_g for r in chosen) / planned_meal_count, 1),
+        "fat_g": round(sum(r.fat_g for r in chosen) / planned_meal_count, 1),
     }
     threshold_map = thresholds or load_thresholds(db)
     statuses = []
@@ -352,7 +376,7 @@ def analyze_menu(
     all_approved = db.scalars(select(Recipe).where(Recipe.is_approved.is_(True))).all()
     approved_map = {recipe.recipe_id: recipe for recipe in all_approved}
     selected_approved = [approved_map[rid] for rid in selected_ids if rid in approved_map]
-    total_days = max(len(grouped["breakfast"]), len(grouped["lunch"]), len(grouped["dinner"]), 1)
+    total_days = service_day_count
 
     def collect_component_suggestions(
         meal_slot: str,
@@ -397,7 +421,7 @@ def analyze_menu(
         suggestions: list[dict] = []
         missing_badges: list[str] = []
         status = "pass"
-        meal_count = len(items)
+        meal_count = len(meal_days[meal_slot]) if menu_items else min(len(items), total_days)
         if meal_count < total_days:
             status = "warning"
             details.append(f"{_meal_label(meal_slot)} coverage is {meal_count} of {total_days} planned days.")
@@ -496,73 +520,74 @@ def analyze_menu(
             suggestions,
         )
 
-    meal_requirements.append(make_meal_requirement(
-        "breakfast",
-        "Breakfast balance",
-        "breakfast",
-        {"entree", "grain"},
-        component_badges=["entrée", "fruit/veg", "dairy", "whole grain"],
-        must_have_dairy=True,
-        must_have_fruit_or_veg=True,
-        must_have_whole_grain=True,
-        include_processed_meat_check=True,
-    ))
-    meal_requirements.append(make_meal_requirement(
-        "lunch",
-        "Lunch balance",
-        "lunch",
-        {"entree"},
-        component_badges=["entrée", "fruit", "vegetable", "dairy", "whole grain", "plant protein"],
-        must_have_dairy=True,
-        must_have_fruit_or_veg=True,
-        must_have_whole_grain=True,
-        must_have_plant_based=True,
-        include_processed_meat_check=True,
-    ))
-    meal_requirements.append(make_meal_requirement(
-        "dinner",
-        "Dinner balance",
-        "dinner",
-        {"entree"},
-        component_badges=["entrée", "fruit", "vegetable", "dairy", "whole grain", "plant protein"],
-        must_have_dairy=True,
-        must_have_fruit_or_veg=True,
-        must_have_whole_grain=True,
-        must_have_plant_based=True,
-        include_processed_meat_check=True,
-    ))
+    if grouped["breakfast"]:
+        meal_requirements.append(make_meal_requirement(
+            "breakfast",
+            "Breakfast balance",
+            "breakfast",
+            {"entree", "grain"},
+            component_badges=["entrée", "fruit/veg", "dairy", "whole grain"],
+            must_have_dairy=True,
+            must_have_fruit_or_veg=True,
+            must_have_whole_grain=True,
+            include_processed_meat_check=True,
+        ))
+    if grouped["lunch"]:
+        meal_requirements.append(make_meal_requirement(
+            "lunch",
+            "Lunch balance",
+            "lunch",
+            {"entree"},
+            component_badges=["entrée", "fruit", "vegetable", "dairy", "whole grain", "plant protein"],
+            must_have_dairy=True,
+            must_have_fruit_or_veg=True,
+            must_have_whole_grain=True,
+            must_have_plant_based=True,
+            include_processed_meat_check=True,
+        ))
+    if grouped["dinner"]:
+        meal_requirements.append(make_meal_requirement(
+            "dinner",
+            "Dinner balance",
+            "dinner",
+            {"entree"},
+            component_badges=["entrée", "fruit", "vegetable", "dairy", "whole grain", "plant protein"],
+            must_have_dairy=True,
+            must_have_fruit_or_veg=True,
+            must_have_whole_grain=True,
+            must_have_plant_based=True,
+            include_processed_meat_check=True,
+        ))
 
     grain_items = [recipe for recipe in selected_approved if recipe.category == "grain"]
     whole_grain_count = sum(1 for recipe in grain_items if _is_whole_grain(recipe))
-    whole_grain_status = "pass"
-    whole_grain_details = [f"{whole_grain_count} of {len(grain_items)} grain recipes are whole grain."]
-    if grain_items and whole_grain_count < max(1, (len(grain_items) + 1) // 2):
-        whole_grain_status = "warning"
-        whole_grain_details.append("At least half of all grains should be whole grain.")
-    elif grain_items:
-        whole_grain_details.append("Whole grain balance is on target.")
-    else:
-        whole_grain_status = "warning"
-        whole_grain_details.append("Add more grain recipes so whole grain mix can be evaluated.")
-    update_overall(whole_grain_status)
-    meal_requirements.append(_make_requirement(
-        "whole_grain_balance",
-        "Whole grain balance",
-        whole_grain_status,
-        whole_grain_details[0],
-        ["whole grain"],
-        [],
-        whole_grain_details,
-        _suggest_recipes(
-            all_approved,
-            meal_slots={"breakfast", "lunch", "dinner"},
-            categories={"grain"},
-            limit=3,
-            exclude_ids=selected_ids,
-            requires_whole_grain=True,
-            prefer_tags=("whole grain", "whole wheat", "barley", "brown rice"),
-        ),
-    ))
+    if grain_items:
+        whole_grain_status = "pass"
+        whole_grain_details = [f"{whole_grain_count} of {len(grain_items)} grain recipes are whole grain."]
+        if whole_grain_count < max(1, (len(grain_items) + 1) // 2):
+            whole_grain_status = "warning"
+            whole_grain_details.append("At least half of all grains should be whole grain.")
+        else:
+            whole_grain_details.append("Whole grain balance is on target.")
+        update_overall(whole_grain_status)
+        meal_requirements.append(_make_requirement(
+            "whole_grain_balance",
+            "Whole grain balance",
+            whole_grain_status,
+            whole_grain_details[0],
+            ["whole grain"],
+            [],
+            whole_grain_details,
+            _suggest_recipes(
+                all_approved,
+                meal_slots={"breakfast", "lunch", "dinner"},
+                categories={"grain"},
+                limit=3,
+                exclude_ids=selected_ids,
+                requires_whole_grain=True,
+                prefer_tags=("whole grain", "whole wheat", "barley", "brown rice"),
+            ),
+        ))
 
     processed_items = [recipe for recipe in selected_approved if _is_processed_meat(recipe)]
     processed_status = "pass" if not processed_items else "fail"

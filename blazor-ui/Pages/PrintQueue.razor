@@ -1,0 +1,63 @@
+@page "/reports/print-queue"
+@inject PrintQueueService Queue
+@inject IJSRuntime Js
+@implements IDisposable
+
+<div class="grid print-queue-page" style="gap: 18px">
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Reports</div>
+                <h2 style="margin-bottom: 6px">Print queue</h2>
+                <p class="muted" style="margin: 0">Collect recipes, menus, and resource files here while you work.</p>
+            </div>
+            <div class="hero-actions no-print">
+                <span class="status-badge">@Queue.Items.Count item@(Queue.Items.Count == 1 ? "" : "s")</span>
+                <button type="button" class="button" @onclick="PrintQueuePage" disabled="@(!Queue.Items.Any())">Print queue</button>
+                <button type="button" class="secondary-button" @onclick="ClearQueue" disabled="@(!Queue.Items.Any())">Clear queue</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        @if (!Queue.Items.Any())
+        {
+            <div class="empty-state">The print queue is empty. Add an item from a recipe, saved menu, sample menu, or resource list.</div>
+        }
+        else
+        {
+            <div class="print-queue-list">
+                @foreach (var item in Queue.Items.OrderBy(item => item.AddedAt))
+                {
+                    <article class="print-queue-item">
+                        <div>
+                            <span class="status-badge brand">@item.ContentType</span>
+                            <h3>@item.Title</h3>
+                            @if (!string.IsNullOrWhiteSpace(item.Detail))
+                            {
+                                <p class="muted">@item.Detail</p>
+                            }
+                            <span class="muted small">Added @item.AddedAt.ToString("MMM d, yyyy h:mm tt")</span>
+                        </div>
+                        <div class="hero-actions no-print">
+                            <a class="secondary-button" href="@item.Url">Open</a>
+                            <button type="button" class="ghost-button" @onclick="() => Queue.Remove(item.Id)">Remove</button>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    protected override void OnInitialized() => Queue.Changed += HandleQueueChanged;
+
+    private void HandleQueueChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task PrintQueuePage() => await Js.InvokeVoidAsync("window.print");
+
+    private void ClearQueue() => Queue.Clear();
+
+    public void Dispose() => Queue.Changed -= HandleQueueChanged;
+}

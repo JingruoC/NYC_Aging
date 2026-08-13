@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
 
@@ -36,6 +36,28 @@ class Recipe(Base):
     nutrient_claims = Column(JSON, nullable=False, default=list)
     vitamin_c_mg = Column(Float, nullable=False, default=0)
     calcium_mg = Column(Float, nullable=False, default=0)
+    saturated_fat_g = Column(Float, nullable=False, default=0)
+    trans_fat_g = Column(Float, nullable=False, default=0)
+    cholesterol_mg = Column(Float, nullable=False, default=0)
+    carbohydrates_g = Column(Float, nullable=False, default=0)
+    total_sugars_g = Column(Float, nullable=False, default=0)
+    added_sugars_g = Column(Float, nullable=False, default=0)
+    vitamin_d_mcg = Column(Float, nullable=False, default=0)
+    iron_mg = Column(Float, nullable=False, default=0)
+    potassium_mg = Column(Float, nullable=False, default=0)
+
+
+class RecipeAttachment(Base):
+    __tablename__ = "recipe_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.recipe_id", ondelete="CASCADE"), nullable=False, index=True)
+    file_name = Column(String(255), nullable=False)
+    content_type = Column(String(150), nullable=False, default="application/octet-stream")
+    file_kind = Column(String(100), nullable=False, default="supporting_document", index=True)
+    file_size = Column(Integer, nullable=False, default=0)
+    content = Column(LargeBinary, nullable=False)
+    uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
 class RecipeComment(Base):
@@ -55,6 +77,44 @@ class RecipeComment(Base):
     target_label = Column(String(255), nullable=True)
     nutrient_key = Column(String(100), nullable=True)
     review_status = Column(String(50), nullable=False, default="open", index=True)
+
+
+class HomeUpdate(Base):
+    __tablename__ = "home_updates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    update_type = Column(String(50), nullable=False, default="Announcement", index=True)
+    summary = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
+    published_on = Column(Date, nullable=False, default=date.today, index=True)
+    image_source = Column(Text, nullable=True)
+
+
+class ResourceFile(Base):
+    __tablename__ = "resource_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False, index=True)
+    resource_type = Column(String(100), nullable=False, index=True)
+    description = Column(Text, nullable=False, default="")
+    audience = Column(String(100), nullable=False, default="Staff + Providers", index=True)
+    last_updated = Column(Date, nullable=False, default=date.today, index=True)
+    uploaded_by = Column(String(255), nullable=False, default="NYC Aging Nutrition Unit")
+    file_name = Column(String(255), nullable=False)
+    content_type = Column(String(150), nullable=False, default="application/octet-stream")
+    file_size = Column(Integer, nullable=False, default=0)
+    content = Column(LargeBinary, nullable=False)
+    uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class RecipeHomeCategorySetting(Base):
+    __tablename__ = "recipe_home_category_settings"
+
+    category_key = Column(String(100), primary_key=True)
+    is_visible = Column(Boolean, nullable=False, default=True)
+    display_label = Column(String(150), nullable=True)
+    description = Column(Text, nullable=True)
 
 
 class Menu(Base):
@@ -168,7 +228,11 @@ class HistoricalMenuItem(Base):
     historical_menu_id = Column(Integer, ForeignKey("historical_menus.id", ondelete="CASCADE"), nullable=False, index=True)
     recipe_id = Column(Integer, ForeignKey("recipes.recipe_id"), nullable=False, index=True)
     position = Column(Integer, nullable=False, default=0)
+    day_index = Column(Integer, nullable=False, default=0)
     meal_slot = Column(String(50), nullable=True)
+    component_key = Column(String(50), nullable=True)
+    is_alternate = Column(Boolean, nullable=False, default=False)
+    source_type = Column(String(50), nullable=False, default="sample")
 
     menu = relationship("HistoricalMenu", back_populates="items")
 

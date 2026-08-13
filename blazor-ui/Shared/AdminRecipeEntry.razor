@@ -1,0 +1,361 @@
+@inject PythonApiClient Api
+@inject NavigationManager Navigation
+
+<div class="grid" style="gap: 18px">
+    <section class="section compact-page-header">
+        <div class="section-header">
+            <div>
+                <div class="eyebrow">Recipe administration</div>
+                <h2>Add recipe to catalog</h2>
+                <p class="muted">Create or update a catalog-ready recipe record and retain the original source files.</p>
+            </div>
+            <a class="ghost-button" href="/recipes">Recipe List</a>
+        </div>
+    </section>
+
+    @if (_errors.Any())
+    {
+        <section class="section validation-panel">
+            <strong>Please review these fields</strong>
+            <ul class="plain-list">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </section>
+    }
+
+    <EditForm Model="_form" OnSubmit="SaveRecipe">
+        <div class="admin-recipe-entry-layout">
+            <div class="grid" style="gap: 18px">
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Catalog record</div>
+                            <h3>Recipe identity and classification</h3>
+                        </div>
+                    </div>
+                    <div class="form-grid-three">
+                        <label class="field full-span">
+                            <span>Recipe name <span class="required">*</span></span>
+                            <InputText class="input" @bind-Value="_form.RecipeName" />
+                        </label>
+                        <label class="field">
+                            <span>Contributor <span class="required">*</span></span>
+                            <InputText class="input" @bind-Value="_form.ContributedBy" placeholder="Program, provider, or NYC Aging unit" />
+                        </label>
+                        <label class="field">
+                            <span>Uploaded date</span>
+                            <InputDate class="input" @bind-Value="_form.CreatedOn" />
+                        </label>
+                        <label class="field">
+                            <span>Approval status</span>
+                            <InputSelect class="input" @bind-Value="_form.ApprovalStatus">
+                                <option value="approved">Approved</option>
+                                <option value="pending">Pending review</option>
+                            </InputSelect>
+                        </label>
+                        <label class="field">
+                            <span>Meal type</span>
+                            <InputSelect class="input" @bind-Value="_form.MealType">
+                                <option value="breakfast">Breakfast</option>
+                                <option value="lunch">Lunch</option>
+                                <option value="dinner">Dinner</option>
+                                <option value="snack">Snack</option>
+                            </InputSelect>
+                        </label>
+                        <label class="field">
+                            <span>Recipe category</span>
+                            <InputSelect class="input" @bind-Value="_form.Category">
+                                @foreach (var category in CategoryOptions)
+                                {
+                                    <option value="@category.Value">@category.Label</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">
+                            <span>Catalog visibility</span>
+                            <InputSelect class="input" @bind-Value="_form.IsPublic">
+                                <option value="true">Public</option>
+                                <option value="false">Private</option>
+                            </InputSelect>
+                        </label>
+                        <label class="field">
+                            <span>Serving size</span>
+                            <InputText class="input" @bind-Value="_form.ServingSize" placeholder="Example: 1 cup" />
+                        </label>
+                        <label class="field">
+                            <span>Recipe yield</span>
+                            <InputNumber class="input" @bind-Value="_form.YieldServings" />
+                        </label>
+                        <label class="field full-span">
+                            <span>One-line catalog description</span>
+                            <InputText class="input" @bind-Value="_form.Description" placeholder="Main ingredients, cuisine, and meal-component contribution" />
+                        </label>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Recipe content</div>
+                            <h3>Ingredients and directions</h3>
+                        </div>
+                    </div>
+                    <div class="form-grid-two">
+                        <label class="field">
+                            <span>Ingredients, one per line</span>
+                            <InputTextArea class="input recipe-textarea" @bind-Value="_form.IngredientsText" />
+                        </label>
+                        <label class="field">
+                            <span>Directions, one step per line</span>
+                            <InputTextArea class="input recipe-textarea" @bind-Value="_form.InstructionsText" />
+                        </label>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <div class="eyebrow">Nutritionist Pro</div>
+                            <h3>Full nutrient analysis per serving</h3>
+                        </div>
+                    </div>
+                    <div class="nutrition-input-grid">
+                        <label class="field"><span>Calories</span><InputNumber class="input" @bind-Value="_form.Calories" /></label>
+                        <label class="field"><span>Total fat (g)</span><InputNumber class="input" @bind-Value="_form.FatG" /></label>
+                        <label class="field"><span>Saturated fat (g)</span><InputNumber class="input" @bind-Value="_form.SaturatedFatG" /></label>
+                        <label class="field"><span>Trans fat (g)</span><InputNumber class="input" @bind-Value="_form.TransFatG" /></label>
+                        <label class="field"><span>Cholesterol (mg)</span><InputNumber class="input" @bind-Value="_form.CholesterolMg" /></label>
+                        <label class="field"><span>Sodium (mg)</span><InputNumber class="input" @bind-Value="_form.SodiumMg" /></label>
+                        <label class="field"><span>Carbohydrate (g)</span><InputNumber class="input" @bind-Value="_form.CarbohydratesG" /></label>
+                        <label class="field"><span>Dietary fiber (g)</span><InputNumber class="input" @bind-Value="_form.FiberG" /></label>
+                        <label class="field"><span>Total sugars (g)</span><InputNumber class="input" @bind-Value="_form.TotalSugarsG" /></label>
+                        <label class="field"><span>Added sugars (g)</span><InputNumber class="input" @bind-Value="_form.AddedSugarsG" /></label>
+                        <label class="field"><span>Protein (g)</span><InputNumber class="input" @bind-Value="_form.ProteinG" /></label>
+                        <label class="field"><span>Vitamin D (mcg)</span><InputNumber class="input" @bind-Value="_form.VitaminDMcg" /></label>
+                        <label class="field"><span>Calcium (mg)</span><InputNumber class="input" @bind-Value="_form.CalciumMg" /></label>
+                        <label class="field"><span>Iron (mg)</span><InputNumber class="input" @bind-Value="_form.IronMg" /></label>
+                        <label class="field"><span>Potassium (mg)</span><InputNumber class="input" @bind-Value="_form.PotassiumMg" /></label>
+                        <label class="field"><span>Vitamin C (mg)</span><InputNumber class="input" @bind-Value="_form.VitaminCMg" /></label>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="grid admin-recipe-entry-sidebar" style="gap: 18px">
+                <section class="section">
+                    <div class="eyebrow">Tags</div>
+                    <h3>Catalog and search tags</h3>
+                    <label class="field">
+                        <span>Add any number of tags, separated by commas</span>
+                        <InputTextArea class="input recipe-textarea compact" @bind-Value="_form.TagsText" placeholder="Entrée, Chinese Cuisine, Non-Starchy Vegetable" />
+                    </label>
+                    <p class="muted small">Tags remain editable after the recipe is saved and can be combined in catalog filters.</p>
+                </section>
+
+                <section class="section">
+                    <div class="eyebrow">Original files</div>
+                    <h3>Keep source documents</h3>
+                    <div class="field">
+                        <span>Nutritionist Pro Excel or nutrition analysis</span>
+                        <div class="file-upload-control">
+                            <label class="file-upload-button" for="admin-analysis-file">Choose files</label>
+                            <span class="file-upload-name">@FileListText(_analysisFiles)</span>
+                            <InputFile id="admin-analysis-file" class="file-upload-input" OnChange="CaptureAnalysisFiles" multiple />
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top: 14px">
+                        <span>Product label image or PDF</span>
+                        <div class="file-upload-control">
+                            <label class="file-upload-button" for="admin-label-file">Choose files</label>
+                            <span class="file-upload-name">@FileListText(_labelFiles)</span>
+                            <InputFile id="admin-label-file" class="file-upload-input" OnChange="CaptureLabelFiles" multiple />
+                        </div>
+                    </div>
+                    <div class="field" style="margin-top: 14px">
+                        <span>Recipe source or supporting documents</span>
+                        <div class="file-upload-control">
+                            <label class="file-upload-button" for="admin-source-file">Choose files</label>
+                            <span class="file-upload-name">@FileListText(_sourceFiles)</span>
+                            <InputFile id="admin-source-file" class="file-upload-input" OnChange="CaptureSourceFiles" multiple />
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section admin-save-panel">
+                    <div>
+                        <div class="eyebrow">Save</div>
+                        <h3>@(_form.ApprovalStatus == "approved" ? "Publish to approved catalog" : "Save for staff review")</h3>
+                    </div>
+                    <button type="submit" class="button" disabled="@_isSaving">@(_isSaving ? "Saving..." : "Save recipe")</button>
+                    <button type="button" class="ghost-button" @onclick="Reset" disabled="@_isSaving">Clear form</button>
+                </section>
+            </aside>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private readonly AdminRecipeForm _form = new();
+    private readonly List<string> _errors = [];
+    private readonly List<IBrowserFile> _analysisFiles = [];
+    private readonly List<IBrowserFile> _labelFiles = [];
+    private readonly List<IBrowserFile> _sourceFiles = [];
+    private bool _isSaving;
+
+    private static readonly (string Value, string Label)[] CategoryOptions =
+    [
+        ("entree", "Entrée"), ("side", "Side"), ("grain", "Grain"),
+        ("fruit", "Fruit"), ("vegetable", "Vegetable"), ("milk", "Milk / Yogurt"),
+        ("appetizer", "Appetizer"), ("condiments", "Condiments"), ("juice", "Juice or Dessert")
+    ];
+
+    private async Task SaveRecipe()
+    {
+        _errors.Clear();
+        if (string.IsNullOrWhiteSpace(_form.RecipeName)) _errors.Add("Recipe name is required.");
+        if (string.IsNullOrWhiteSpace(_form.ContributedBy)) _errors.Add("Contributor is required.");
+        if (_form.YieldServings < 1) _errors.Add("Recipe yield must be at least 1.");
+        if (_errors.Any()) return;
+
+        _isSaving = true;
+        try
+        {
+            var tags = SplitTokens(_form.TagsText);
+            tags.Add(_form.Category);
+            var created = await Api.CreateRecipeAsync(new RecipeCreateRequest
+            {
+                RecipeName = _form.RecipeName.Trim(),
+                MealType = _form.MealType,
+                Category = _form.Category,
+                Calories = _form.Calories,
+                SodiumMg = _form.SodiumMg,
+                ProteinG = _form.ProteinG,
+                FiberG = _form.FiberG,
+                FatG = _form.FatG,
+                Tags = tags.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                IsApproved = _form.ApprovalStatus == "approved",
+                Ingredients = SplitLines(_form.IngredientsText),
+                Instructions = SplitLines(_form.InstructionsText),
+                ServingSize = _form.ServingSize,
+                YieldServings = _form.YieldServings,
+                ScaleNote = _form.Description,
+                ContributedBy = _form.ContributedBy,
+                CreatedOn = _form.CreatedOn,
+                IsPublic = _form.IsPublic,
+                NutrientClaims = [],
+                VitaminCMg = _form.VitaminCMg,
+                CalciumMg = _form.CalciumMg,
+                SaturatedFatG = _form.SaturatedFatG,
+                TransFatG = _form.TransFatG,
+                CholesterolMg = _form.CholesterolMg,
+                CarbohydratesG = _form.CarbohydratesG,
+                TotalSugarsG = _form.TotalSugarsG,
+                AddedSugarsG = _form.AddedSugarsG,
+                VitaminDMcg = _form.VitaminDMcg,
+                IronMg = _form.IronMg,
+                PotassiumMg = _form.PotassiumMg
+            });
+
+            await UploadFiles(created.RecipeId, "nutrition_analysis", _analysisFiles);
+            await UploadFiles(created.RecipeId, "product_label", _labelFiles);
+            await UploadFiles(created.RecipeId, "recipe_source", _sourceFiles);
+            Navigation.NavigateTo($"/recipes/{created.RecipeId}");
+        }
+        catch (Exception ex)
+        {
+            _errors.Add($"The recipe could not be saved: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void CaptureAnalysisFiles(InputFileChangeEventArgs args) => Capture(args, _analysisFiles);
+    private void CaptureLabelFiles(InputFileChangeEventArgs args) => Capture(args, _labelFiles);
+    private void CaptureSourceFiles(InputFileChangeEventArgs args) => Capture(args, _sourceFiles);
+
+    private static void Capture(InputFileChangeEventArgs args, List<IBrowserFile> target)
+    {
+        target.Clear();
+        target.AddRange(args.GetMultipleFiles(5));
+    }
+
+    private async Task UploadFiles(int recipeId, string kind, IEnumerable<IBrowserFile> files)
+    {
+        foreach (var file in files)
+        {
+            await Api.UploadRecipeAttachmentAsync(recipeId, kind, file);
+        }
+    }
+
+    private void Reset()
+    {
+        _form.Reset();
+        _analysisFiles.Clear();
+        _labelFiles.Clear();
+        _sourceFiles.Clear();
+        _errors.Clear();
+    }
+
+    private static string FileListText(IReadOnlyCollection<IBrowserFile> files) =>
+        files.Count == 0 ? "No file selected" : string.Join(", ", files.Select(file => file.Name));
+
+    private static List<string> SplitLines(string? value) =>
+        (value ?? string.Empty).Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static List<string> SplitTokens(string? value) =>
+        (value ?? string.Empty).Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private sealed class AdminRecipeForm
+    {
+        public string RecipeName { get; set; } = string.Empty;
+        public string ContributedBy { get; set; } = "NYC Aging Nutrition Unit";
+        public DateTime CreatedOn { get; set; } = DateTime.Today;
+        public string ApprovalStatus { get; set; } = "approved";
+        public string MealType { get; set; } = "lunch";
+        public string Category { get; set; } = "entree";
+        public bool IsPublic { get; set; } = true;
+        public string ServingSize { get; set; } = "1 serving";
+        public int YieldServings { get; set; } = 50;
+        public string Description { get; set; } = string.Empty;
+        public string IngredientsText { get; set; } = string.Empty;
+        public string InstructionsText { get; set; } = string.Empty;
+        public string TagsText { get; set; } = string.Empty;
+        public decimal Calories { get; set; }
+        public decimal SodiumMg { get; set; }
+        public decimal ProteinG { get; set; }
+        public decimal FiberG { get; set; }
+        public decimal FatG { get; set; }
+        public decimal SaturatedFatG { get; set; }
+        public decimal TransFatG { get; set; }
+        public decimal CholesterolMg { get; set; }
+        public decimal CarbohydratesG { get; set; }
+        public decimal TotalSugarsG { get; set; }
+        public decimal AddedSugarsG { get; set; }
+        public decimal VitaminDMcg { get; set; }
+        public decimal CalciumMg { get; set; }
+        public decimal IronMg { get; set; }
+        public decimal PotassiumMg { get; set; }
+        public decimal VitaminCMg { get; set; }
+
+        public void Reset()
+        {
+            RecipeName = string.Empty;
+            ContributedBy = "NYC Aging Nutrition Unit";
+            CreatedOn = DateTime.Today;
+            ApprovalStatus = "approved";
+            MealType = "lunch";
+            Category = "entree";
+            IsPublic = true;
+            ServingSize = "1 serving";
+            YieldServings = 50;
+            Description = IngredientsText = InstructionsText = TagsText = string.Empty;
+            Calories = SodiumMg = ProteinG = FiberG = FatG = SaturatedFatG = TransFatG = 0;
+            CholesterolMg = CarbohydratesG = TotalSugarsG = AddedSugarsG = 0;
+            VitaminDMcg = CalciumMg = IronMg = PotassiumMg = VitaminCMg = 0;
+        }
+    }
+}

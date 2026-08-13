@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject AppModeService AppMode
+@inject PrintQueueService PrintQueue
+@inject IJSRuntime Js
 @implements IDisposable
 
 <div class="app-shell">
@@ -21,7 +23,7 @@
                 <NavLink href="/" Match="NavLinkMatch.All">Home</NavLink>
                 <a class="@PrimaryClass("recipes")" href="/recipes/home">Recipe</a>
                 <a class="@PrimaryClass("menus")" href="/menus/list">Menus</a>
-                <NavLink href="/reports">Reports</NavLink>
+                <a class="@PrimaryClass("reports")" href="/reports">Reports</a>
                 <NavLink href="/resources">Resources</NavLink>
             </nav>
         </div>
@@ -47,6 +49,7 @@
 
 @code {
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+    private const string RoleStorageKey = "simple-servings-role";
 
     private bool IsSection(string section)
     {
@@ -55,6 +58,7 @@
         {
             "recipes" => path == "/recipes" || path.StartsWith("/recipes/"),
             "menus" => path == "/menus" || path.StartsWith("/menus/") || path.StartsWith("/sample-menus/"),
+            "reports" => path == "/reports" || path.StartsWith("/reports/"),
             _ => false
         };
     }
@@ -65,7 +69,9 @@
         ? "Recipe"
         : IsSection("menus")
             ? "Menus"
-            : CurrentPath.StartsWith("/resources") ? "Resources" : string.Empty;
+            : IsSection("reports")
+                ? "Reports"
+                : CurrentPath.StartsWith("/resources") ? "Resources" : string.Empty;
 
     private IReadOnlyList<SubnavItem> SecondaryItems
     {
@@ -110,6 +116,15 @@
                 ];
             }
 
+            if (IsSection("reports"))
+            {
+                return
+                [
+                    new("Report Catalog", "/reports", NavLinkMatch.All),
+                    new($"Print Queue ({PrintQueue.Items.Count})", "/reports/print-queue", NavLinkMatch.All)
+                ];
+            }
+
             if (CurrentPath.StartsWith("/resources"))
             {
                 return [];
@@ -122,6 +137,29 @@
     protected override void OnInitialized()
     {
         AppMode.Changed += HandleAppModeChanged;
+        PrintQueue.Changed += HandlePrintQueueChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            var storedRole = await Js.InvokeAsync<string?>("localStorage.getItem", RoleStorageKey);
+            if (Enum.TryParse<AppRole>(storedRole, out var role))
+            {
+                AppMode.SetRole(role);
+                RedirectIfCurrentPageIsHiddenForRole();
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // JavaScript is unavailable during prerendering; the interactive render retries normally.
+        }
     }
 
     private void HandleAppModeChanged()
@@ -129,11 +167,17 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void OnRoleChanged(ChangeEventArgs args)
+    private void HandlePrintQueueChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRoleChanged(ChangeEventArgs args)
     {
         if (Enum.TryParse<AppRole>(args.Value?.ToString(), out var role))
         {
             AppMode.SetRole(role);
+            await Js.InvokeVoidAsync("localStorage.setItem", RoleStorageKey, role.ToString());
             RedirectIfCurrentPageIsHiddenForRole();
         }
     }
@@ -165,6 +209,7 @@
     public void Dispose()
     {
         AppMode.Changed -= HandleAppModeChanged;
+        PrintQueue.Changed -= HandlePrintQueueChanged;
     }
 
     private sealed record SubnavItem(string Label, string Href, NavLinkMatch Match);

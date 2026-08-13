@@ -22,7 +22,16 @@ CREATE TABLE IF NOT EXISTS recipes (
   is_dead BOOLEAN NOT NULL DEFAULT FALSE,
   nutrient_claims JSONB NOT NULL DEFAULT '[]'::jsonb,
   vitamin_c_mg DOUBLE PRECISION NOT NULL DEFAULT 0,
-  calcium_mg DOUBLE PRECISION NOT NULL DEFAULT 0
+  calcium_mg DOUBLE PRECISION NOT NULL DEFAULT 0,
+  saturated_fat_g DOUBLE PRECISION NOT NULL DEFAULT 0,
+  trans_fat_g DOUBLE PRECISION NOT NULL DEFAULT 0,
+  cholesterol_mg DOUBLE PRECISION NOT NULL DEFAULT 0,
+  carbohydrates_g DOUBLE PRECISION NOT NULL DEFAULT 0,
+  total_sugars_g DOUBLE PRECISION NOT NULL DEFAULT 0,
+  added_sugars_g DOUBLE PRECISION NOT NULL DEFAULT 0,
+  vitamin_d_mcg DOUBLE PRECISION NOT NULL DEFAULT 0,
+  iron_mg DOUBLE PRECISION NOT NULL DEFAULT 0,
+  potassium_mg DOUBLE PRECISION NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS ix_recipes_recipe_name ON recipes(recipe_name);
@@ -32,6 +41,40 @@ CREATE INDEX IF NOT EXISTS ix_recipes_is_approved ON recipes(is_approved);
 CREATE INDEX IF NOT EXISTS ix_recipes_is_public ON recipes(is_public);
 CREATE INDEX IF NOT EXISTS ix_recipes_is_favorite ON recipes(is_favorite);
 CREATE INDEX IF NOT EXISTS ix_recipes_is_dead ON recipes(is_dead);
+
+CREATE TABLE IF NOT EXISTS recipe_attachments (
+  id SERIAL PRIMARY KEY,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(recipe_id) ON DELETE CASCADE,
+  file_name VARCHAR(500) NOT NULL,
+  content_type VARCHAR(255) NOT NULL DEFAULT 'application/octet-stream',
+  file_kind VARCHAR(100) NOT NULL DEFAULT 'supporting_document',
+  file_size BIGINT NOT NULL DEFAULT 0,
+  content BYTEA NOT NULL,
+  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_recipe_attachments_recipe_id ON recipe_attachments(recipe_id);
+CREATE INDEX IF NOT EXISTS ix_recipe_attachments_file_kind ON recipe_attachments(file_kind);
+
+CREATE TABLE IF NOT EXISTS resource_files (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  resource_type VARCHAR(100) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  audience VARCHAR(100) NOT NULL DEFAULT 'Staff + Providers',
+  last_updated DATE NOT NULL DEFAULT CURRENT_DATE,
+  uploaded_by VARCHAR(255) NOT NULL DEFAULT 'NYC Aging Nutrition Unit',
+  file_name VARCHAR(255) NOT NULL,
+  content_type VARCHAR(150) NOT NULL DEFAULT 'application/octet-stream',
+  file_size BIGINT NOT NULL DEFAULT 0,
+  content BYTEA NOT NULL,
+  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_resource_files_title ON resource_files(title);
+CREATE INDEX IF NOT EXISTS ix_resource_files_resource_type ON resource_files(resource_type);
+CREATE INDEX IF NOT EXISTS ix_resource_files_audience ON resource_files(audience);
+CREATE INDEX IF NOT EXISTS ix_resource_files_last_updated ON resource_files(last_updated);
 
 CREATE TABLE IF NOT EXISTS recipe_comments (
   id SERIAL PRIMARY KEY,
@@ -53,6 +96,26 @@ CREATE TABLE IF NOT EXISTS recipe_comments (
 CREATE INDEX IF NOT EXISTS ix_recipe_comments_recipe_id ON recipe_comments(recipe_id);
 CREATE INDEX IF NOT EXISTS ix_recipe_comments_target_type ON recipe_comments(target_type);
 CREATE INDEX IF NOT EXISTS ix_recipe_comments_review_status ON recipe_comments(review_status);
+
+CREATE TABLE IF NOT EXISTS home_updates (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  update_type VARCHAR(50) NOT NULL DEFAULT 'Announcement',
+  summary TEXT NOT NULL,
+  content TEXT NOT NULL,
+  published_on DATE NOT NULL DEFAULT CURRENT_DATE,
+  image_source TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_home_updates_update_type ON home_updates(update_type);
+CREATE INDEX IF NOT EXISTS ix_home_updates_published_on ON home_updates(published_on);
+
+CREATE TABLE IF NOT EXISTS recipe_home_category_settings (
+  category_key VARCHAR(100) PRIMARY KEY,
+  is_visible BOOLEAN NOT NULL DEFAULT TRUE,
+  display_label VARCHAR(150),
+  description TEXT
+);
 
 CREATE TABLE IF NOT EXISTS menus (
   id SERIAL PRIMARY KEY,
@@ -170,7 +233,11 @@ CREATE TABLE IF NOT EXISTS historical_menu_items (
   historical_menu_id INTEGER NOT NULL REFERENCES historical_menus(id) ON DELETE CASCADE,
   recipe_id INTEGER NOT NULL REFERENCES recipes(recipe_id),
   position INTEGER NOT NULL DEFAULT 0,
-  meal_slot VARCHAR(50)
+  day_index INTEGER NOT NULL DEFAULT 0,
+  meal_slot VARCHAR(50),
+  component_key VARCHAR(50),
+  is_alternate BOOLEAN NOT NULL DEFAULT FALSE,
+  source_type VARCHAR(50) NOT NULL DEFAULT 'sample'
 );
 
 CREATE INDEX IF NOT EXISTS ix_historical_menu_items_historical_menu_id ON historical_menu_items(historical_menu_id);

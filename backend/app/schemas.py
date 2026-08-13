@@ -36,6 +36,15 @@ class RecipeOut(BaseModel):
     nutrient_claims: list[str] = Field(default_factory=list)
     vitamin_c_mg: float = 0
     calcium_mg: float = 0
+    saturated_fat_g: float = 0
+    trans_fat_g: float = 0
+    cholesterol_mg: float = 0
+    carbohydrates_g: float = 0
+    total_sugars_g: float = 0
+    added_sugars_g: float = 0
+    vitamin_d_mcg: float = 0
+    iron_mg: float = 0
+    potassium_mg: float = 0
 
 
 class RecipeCreate(BaseModel):
@@ -62,6 +71,15 @@ class RecipeCreate(BaseModel):
     nutrient_claims: list[str] = Field(default_factory=list)
     vitamin_c_mg: float = 0
     calcium_mg: float = 0
+    saturated_fat_g: float = 0
+    trans_fat_g: float = 0
+    cholesterol_mg: float = 0
+    carbohydrates_g: float = 0
+    total_sugars_g: float = 0
+    added_sugars_g: float = 0
+    vitamin_d_mcg: float = 0
+    iron_mg: float = 0
+    potassium_mg: float = 0
 
 
 class RecipeUpdate(BaseModel):
@@ -88,6 +106,27 @@ class RecipeUpdate(BaseModel):
     nutrient_claims: Optional[list[str]] = None
     vitamin_c_mg: Optional[float] = None
     calcium_mg: Optional[float] = None
+    saturated_fat_g: Optional[float] = None
+    trans_fat_g: Optional[float] = None
+    cholesterol_mg: Optional[float] = None
+    carbohydrates_g: Optional[float] = None
+    total_sugars_g: Optional[float] = None
+    added_sugars_g: Optional[float] = None
+    vitamin_d_mcg: Optional[float] = None
+    iron_mg: Optional[float] = None
+    potassium_mg: Optional[float] = None
+
+
+class RecipeAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    recipe_id: int
+    file_name: str
+    content_type: str
+    file_kind: str
+    file_size: int
+    uploaded_at: datetime
 
 
 class RecipeCommentCreate(BaseModel):
@@ -121,6 +160,58 @@ class RecipeCommentOut(BaseModel):
     target_label: Optional[str] = None
     nutrient_key: Optional[str] = None
     review_status: str = "open"
+
+
+class HomeUpdateCreate(BaseModel):
+    title: str
+    update_type: str = "Announcement"
+    summary: str
+    content: Optional[str] = None
+    published_on: date = Field(default_factory=date.today)
+    image_source: Optional[str] = None
+
+
+class HomeUpdateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    update_type: str
+    summary: str
+    content: str
+    published_on: date
+    image_source: Optional[str] = None
+
+
+class RecipeHomeCategorySettingUpdate(BaseModel):
+    is_visible: bool
+    display_label: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ResourceFileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    resource_type: str
+    description: str
+    audience: str
+    last_updated: date
+    uploaded_by: str
+    file_name: str
+    content_type: str
+    file_size: int
+    uploaded_at: datetime
+
+
+class RecipeHomeCategorySettingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category_key: str
+    is_visible: bool
+    display_label: Optional[str] = None
+    description: Optional[str] = None
 
 
 class MenuItemIn(BaseModel):
@@ -324,6 +415,7 @@ class HistoricalMenuSummaryOut(BaseModel):
 class HistoricalMenuItemOut(BaseModel):
     recipe_id: int
     position: int
+    day_index: int = 0
     meal_slot: Optional[str] = None
     component_key: Optional[str] = None
     is_alternate: bool = False

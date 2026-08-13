@@ -1,11 +1,61 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from io import BytesIO
 
+from openpyxl import Workbook
 from sqlalchemy import select
 
 from .db import Base, engine, SessionLocal
-from .models import HistoricalMenu, HistoricalMenuItem, Menu, MenuComment, MenuItem, NutrientThreshold, Recipe
+from .models import (
+    HistoricalMenu,
+    HistoricalMenuItem,
+    HomeUpdate,
+    Menu,
+    MenuComment,
+    MenuItem,
+    NutrientThreshold,
+    Recipe,
+    RecipeAttachment,
+    RecipeHomeCategorySetting,
+)
+
+
+HOME_UPDATES = [
+    {
+        "id": 1,
+        "title": "Cycle menu preparation",
+        "update_type": "Announcement",
+        "summary": "Confirm cycle, service days, diet type, and contract selection before building a new menu.",
+        "content": "Before starting a new cycle, confirm the contract, service days, diet type, and menu coverage.\n\nReview the cycle dates and selected meal types before recipes are placed. This helps prevent a completed week from being attached to the wrong contract or service pattern.\n\nIf an existing menu will be reused, open it from Menu List or Sample Menus and select it as the starting point before making changes.",
+        "published_on": date.today() - timedelta(days=6),
+        "image_source": "/images/cycle-menu-notice.svg",
+    },
+    {
+        "id": 2,
+        "title": "Seasonal produce planning",
+        "update_type": "Story",
+        "summary": "A short planning note on using approved seasonal fruit and vegetable recipes across the cycle.",
+        "content": "Seasonal produce can add variety across a multi-week menu cycle while keeping the recipe catalog familiar to providers.\n\nUse the approved recipe list to compare fruit and vegetable choices, then check for repeated recipes across the selected week. Staff can feature approved seasonal recipes on the home page when they are especially useful for an upcoming cycle.\n\nRecipes still need to meet the applicable meal-component and nutrition requirements before the week can be marked complete.",
+        "published_on": date.today() - timedelta(days=13),
+        "image_source": "/images/seasonal-produce-story.svg",
+    },
+]
+
+RECIPE_HOME_CATEGORIES = [
+    ("breakfast", True),
+    ("appetizer", False),
+    ("entree", True),
+    ("side", True),
+    ("grain", True),
+    ("vegetable", True),
+    ("fruit", True),
+    ("milk", True),
+    ("dairy-free", False),
+    ("condiments", False),
+    ("juice", False),
+    ("plant-based", True),
+]
 
 
 RECIPES = [
@@ -62,34 +112,34 @@ def _legacy_ingredients(row: dict) -> list[str]:
     name = row["recipe_name"].lower()
     category = row["category"]
     if "oatmeal" in name:
-        return ["rolled oats", "apples", "cinnamon", "low fat milk", "brown sugar"]
+        return ["12 cups rolled oats", "10 pounds apples", "1/2 cup cinnamon", "3 gallons low fat milk", "2 cups brown sugar"]
     if "egg" in name:
-        return ["eggs", "spinach", "whole wheat bread", "light mayonnaise", "black pepper"]
+        return ["50 eggs", "5 pounds spinach", "50 slices whole wheat bread", "3 cups light mayonnaise", "2 tablespoons black pepper"]
     if "milk" in name:
-        return ["1% low fat milk"]
+        return ["50 cups 1% low fat milk"]
     if "yogurt" in name:
-        return ["low fat yogurt", "blueberries", "whole grain granola"]
+        return ["25 pounds low fat yogurt", "8 pounds blueberries", "6 pounds whole grain granola"]
     if "rice" in name:
-        return ["brown rice", "low sodium vegetable stock", "onion", "parsley"]
+        return ["12 cups brown rice", "6 gallons low sodium vegetable stock", "5 pounds onion", "2 cups parsley"]
     if "tofu" in name:
-        return ["firm tofu", "sesame seeds", "low sodium soy sauce", "scallions"]
+        return ["18 pounds firm tofu", "2 cups sesame seeds", "3 cups low sodium soy sauce", "2 pounds scallions"]
     if "lentil" in name:
-        return ["lentils", "carrots", "celery", "tomatoes", "low sodium broth"]
+        return ["12 pounds lentils", "5 pounds carrots", "4 pounds celery", "8 pounds tomatoes", "5 gallons low sodium broth"]
     if "chicken" in name:
-        return ["chicken", "herbs", "garlic", "low sodium broth"]
+        return ["22 pounds chicken", "1 cup herbs", "1/2 cup garlic", "3 gallons low sodium broth"]
     if "turkey" in name:
-        return ["turkey", "whole wheat bread crumbs", "onion", "herbs"]
+        return ["22 pounds turkey", "5 pounds whole wheat bread crumbs", "4 pounds onion", "1 cup herbs"]
     if "fish" in name:
-        return ["white fish", "lemon", "parsley", "olive oil"]
+        return ["22 pounds white fish", "25 lemons", "2 cups parsley", "3 cups olive oil"]
     if category == "fruit":
-        return [row["recipe_name"].lower(), "fresh fruit"]
+        return [f"50 servings {row['recipe_name'].lower()}", "25 pounds fresh fruit"]
     if category == "vegetable":
-        return [row["recipe_name"].lower(), "vegetables", "olive oil", "herbs"]
+        return [f"25 pounds {row['recipe_name'].lower()}", "20 pounds vegetables", "3 cups olive oil", "1 cup herbs"]
     if category == "grain":
-        return [row["recipe_name"].lower(), "whole grain ingredient", "low sodium seasoning"]
+        return [f"50 servings {row['recipe_name'].lower()}", "12 pounds whole grain ingredient", "1 cup low sodium seasoning"]
     if category == "milk":
-        return [row["recipe_name"].lower(), "dairy or calcium-fortified equivalent"]
-    return [row["recipe_name"].lower(), "approved menu ingredient", "low sodium seasoning"]
+        return [f"50 servings {row['recipe_name'].lower()}", "50 cups dairy or calcium-fortified equivalent"]
+    return [f"50 servings {row['recipe_name'].lower()}", "20 pounds approved menu ingredient", "1 cup low sodium seasoning"]
 
 
 def _legacy_claims(row: dict) -> list[str]:
@@ -274,6 +324,148 @@ RECIPES.extend(
 )
 
 
+def _pdf_text(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _build_mock_pdf(title: str, lines: list[str]) -> bytes:
+    """Build a small valid PDF so seeded upload links can be tested end to end."""
+    commands = ["BT", "/F1 18 Tf", f"72 748 Td ({_pdf_text(title)}) Tj", "/F1 11 Tf"]
+    for line in lines:
+        commands.extend(["0 -24 Td", f"({_pdf_text(line)}) Tj"])
+    commands.append("ET")
+    stream = "\n".join(commands).encode("latin-1")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    document = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(document))
+        document.extend(f"{index} 0 obj\n".encode("ascii"))
+        document.extend(obj)
+        document.extend(b"\nendobj\n")
+    xref_offset = len(document)
+    document.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    document.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        document.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    document.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(document)
+
+
+def _build_mock_nutritionist_pro_workbook() -> bytes:
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Recipe Summary"
+    summary.append(["Nutritionist Pro Recipe Analysis"])
+    summary.append(["Recipe Name", "Southwest Brown Rice Bowl"])
+    summary.append(["Recipe Yield", 48])
+    summary.append(["Serving Size", "1 serving"])
+    summary.append(["Contributor", "ABSW OAC"])
+    summary.append(["Analysis Date", "2026-07-20"])
+
+    nutrients = workbook.create_sheet("Nutrient Analysis")
+    nutrients.append(["Nutrient", "Amount per serving", "Unit"])
+    nutrient_rows = [
+        ("Calories", 365, "kcal"),
+        ("Total Fat", 9, "g"),
+        ("Saturated Fat", 1.5, "g"),
+        ("Trans Fat", 0, "g"),
+        ("Cholesterol", 0, "mg"),
+        ("Sodium", 690, "mg"),
+        ("Total Carbohydrate", 62, "g"),
+        ("Dietary Fiber", 7, "g"),
+        ("Total Sugars", 5, "g"),
+        ("Added Sugars", 0, "g"),
+        ("Protein", 12, "g"),
+        ("Vitamin D", 0, "mcg"),
+        ("Calcium", 40, "mg"),
+        ("Iron", 2.8, "mg"),
+        ("Potassium", 510, "mg"),
+    ]
+    for row in nutrient_rows:
+        nutrients.append(row)
+
+    ingredients = workbook.create_sheet("Ingredients")
+    ingredients.append(["Ingredient", "Quantity", "Unit"])
+    ingredients.append(["Brown rice, cooked", 24, "cups"])
+    ingredients.append(["Black beans, low sodium", 12, "cups"])
+    ingredients.append(["Corn", 12, "cups"])
+    ingredients.append(["Bell peppers", 12, "cups"])
+    ingredients.append(["Salsa, low sodium", 6, "cups"])
+
+    for sheet in workbook.worksheets:
+        sheet.freeze_panes = "A2"
+        for column in sheet.columns:
+            width = max(len(str(cell.value or "")) for cell in column) + 2
+            sheet.column_dimensions[column[0].column_letter].width = min(width, 42)
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _seed_recipe_attachments(session) -> None:
+    attachment_rows = [
+        {
+            "recipe_id": 41,
+            "file_name": "three-bean-vegetable-chili.pdf",
+            "content_type": "application/pdf",
+            "file_kind": "recipe_file",
+            "uploaded_at": datetime(2026, 7, 18, 10, 15),
+            "content": _build_mock_pdf(
+                "Three Bean Vegetable Chili",
+                [
+                    "Submitted by Astoria NSC",
+                    "Yield: 60 servings | Serving size: 1 cup",
+                    "Ingredients and production directions attached for NYC Aging review.",
+                ],
+            ),
+        },
+        {
+            "recipe_id": 42,
+            "file_name": "southwest-brown-rice-analysis.xlsx",
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "file_kind": "nutrition_analysis",
+            "uploaded_at": datetime(2026, 7, 20, 14, 30),
+            "content": _build_mock_nutritionist_pro_workbook(),
+        },
+        {
+            "recipe_id": 43,
+            "file_name": "reduced-sodium-turkey-patty-label.pdf",
+            "content_type": "application/pdf",
+            "file_kind": "product_label",
+            "uploaded_at": datetime(2026, 7, 21, 9, 45),
+            "content": _build_mock_pdf(
+                "Reduced Sodium Turkey Patty",
+                [
+                    "Manufacturer: Metro Food Service",
+                    "Serving size: 1 patty | Calories: 145 | Sodium: 360 mg",
+                    "Submitted by Ridgewood OAC as a pre-prepared product label.",
+                ],
+            ),
+        },
+    ]
+    for row in attachment_rows:
+        existing = session.scalar(
+            select(RecipeAttachment).where(
+                RecipeAttachment.recipe_id == row["recipe_id"],
+                RecipeAttachment.file_name == row["file_name"],
+            )
+        )
+        if existing is not None:
+            continue
+        content = row["content"]
+        session.add(RecipeAttachment(**row, file_size=len(content)))
+
+
 THRESHOLDS = [
     {"nutrient_key": "calories", "low_fail": 550, "low_warn": 650, "high_warn": 850, "high_fail": 950, "unit": "kcal"},
     {"nutrient_key": "sodium_mg", "low_fail": None, "low_warn": None, "high_warn": 1800, "high_fail": 2300, "unit": "mg"},
@@ -369,6 +561,66 @@ for index, menu in enumerate(HISTORICAL_MENUS, start=1):
             "contracts": [LEGACY_CONTRACTS[(index - 1) % len(LEGACY_CONTRACTS)]],
             "sample_category": "Sample Menu" if index <= 12 else "Historical Menu",
         }
+    )
+
+
+SAMPLE_COMPONENT_RECIPES = {
+    "Breakfast": {
+        "entree": [2, 5, 2, 5, 2, 5, 2],
+        "grains": [1, 3, 1, 3, 1, 3, 1],
+        "vegetable": [2, 2, 2, 2, 2, 2, 2],
+        "fruit": [6, 11, 6, 34, 6, 39, 6],
+        "dairy": [4, 46, 4, 46, 4, 46, 4],
+    },
+    "Lunch": {
+        "entree": [7, 31, 33, 40, 21, 7, 31],
+        "grains": [10, 23, 10, 23, 10, 23, 10],
+        "vegetable": [9, 8, 12, 20, 32, 9, 8],
+        "fruit": [11, 34, 25, 39, 11, 34, 25],
+        "dairy": [22, 30, 22, 30, 22, 30, 22],
+    },
+    "Dinner": {
+        "entree": [13, 18, 19, 26, 36, 13, 18],
+        "grains": [16, 37, 27, 16, 37, 27, 16],
+        "vegetable": [15, 28, 38, 15, 28, 38, 15],
+        "fruit": [17, 29, 39, 17, 29, 39, 17],
+        "dairy": [22, 30, 22, 30, 22, 30, 22],
+    },
+}
+
+
+def _complete_sample_items(
+    meal_type: str,
+    days_per_week: int,
+    *,
+    vegetarian: bool = False,
+) -> list[dict[str, int | str]]:
+    pools = dict(SAMPLE_COMPONENT_RECIPES.get(meal_type, SAMPLE_COMPONENT_RECIPES["Lunch"]))
+    if vegetarian:
+        pools["entree"] = {
+            "Breakfast": [2, 2, 2, 2, 2, 2, 2],
+            "Lunch": [31, 40, 31, 40, 31, 40, 31],
+            "Dinner": [36, 26, 36, 26, 36, 26, 36],
+        }.get(meal_type, [31, 40, 31, 40, 31, 40, 31])
+    items: list[dict[str, int | str]] = []
+    for day_index in range(days_per_week):
+        for component_key, recipes in pools.items():
+            items.append(
+                {
+                    "recipe_id": recipes[day_index % len(recipes)],
+                    "day_index": day_index,
+                    "component_key": component_key,
+                }
+            )
+    return items
+
+
+for menu in HISTORICAL_MENUS:
+    sample_meal_type = menu["meal_type"] if menu["meal_type"] in SAMPLE_COMPONENT_RECIPES else "Lunch"
+    menu["items"] = _complete_sample_items(
+        sample_meal_type,
+        menu["days_per_week"],
+        vegetarian="vegetarian" in menu["name"].lower(),
     )
 
 
@@ -717,6 +969,50 @@ def _replace_saved_menu_items(session, menu: Menu, menu_row: dict) -> None:
         )
 
 
+def _replace_historical_menu_items(session, menu: HistoricalMenu, menu_row: dict) -> None:
+    existing_items = session.scalars(
+        select(HistoricalMenuItem).where(HistoricalMenuItem.historical_menu_id == menu.id)
+    ).all()
+    for item in existing_items:
+        session.delete(item)
+
+    for position, placement in enumerate(menu_row["items"], start=1):
+        component_key = str(placement["component_key"])
+        session.add(
+            HistoricalMenuItem(
+                historical_menu_id=menu.id,
+                recipe_id=int(placement["recipe_id"]),
+                position=position,
+                day_index=int(placement["day_index"]),
+                meal_slot=f"{menu_row['meal_type'].lower()}_{component_key}",
+                component_key=component_key,
+                is_alternate=component_key == "alternate",
+                source_type="sample",
+            )
+        )
+
+
+def _sync_historical_menu_metadata(menu: HistoricalMenu, menu_row: dict) -> None:
+    """Keep seeded samples internally consistent after seed definitions change."""
+    for field in [
+        "name",
+        "service_date",
+        "program_type",
+        "meal_type",
+        "menu_coverage",
+        "diet_type",
+        "menu_duration_type",
+        "meal_served_format",
+        "menu_tags",
+        "cycle",
+        "days_per_week",
+        "contracts",
+        "sample_category",
+        "passes_nutrition",
+    ]:
+        setattr(menu, field, menu_row[field])
+
+
 def _sync_saved_menu_metadata(menu: Menu, menu_row: dict) -> None:
     for field in [
         "contract_name",
@@ -757,6 +1053,13 @@ def seed_database() -> None:
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
     try:
+        if session.scalar(select(HomeUpdate.id).limit(1)) is None:
+            session.add_all([HomeUpdate(**row) for row in HOME_UPDATES])
+        if session.scalar(select(RecipeHomeCategorySetting.category_key).limit(1)) is None:
+            session.add_all([
+                RecipeHomeCategorySetting(category_key=key, is_visible=is_visible)
+                for key, is_visible in RECIPE_HOME_CATEGORIES
+            ])
         if session.scalar(select(Recipe.recipe_id).limit(1)) is None:
             session.add_all([Recipe(**row) for row in RECIPES])
         else:
@@ -767,8 +1070,15 @@ def seed_database() -> None:
                     continue
                 for field in LEGACY_RECIPE_FIELDS:
                     value = getattr(recipe, field, None)
-                    if field in {"is_favorite", "vitamin_c_mg", "calcium_mg"} or value in (None, [], ""):
+                    should_refresh_seed_ingredients = (
+                        field == "ingredients"
+                        and row["recipe_id"] <= 40
+                        and not any(str(line).lstrip()[:1].isdigit() for line in (value or []))
+                    )
+                    if field in {"is_favorite", "vitamin_c_mg", "calcium_mg"} or value in (None, [], "") or should_refresh_seed_ingredients:
                         setattr(recipe, field, row[field])
+        session.flush()
+        _seed_recipe_attachments(session)
         if session.scalar(select(NutrientThreshold.id).limit(1)) is None:
             session.add_all([NutrientThreshold(**row) for row in THRESHOLDS])
         if session.scalar(select(HistoricalMenu.id).limit(1)) is None:
@@ -792,26 +1102,14 @@ def seed_database() -> None:
                 )
                 session.add(hist)
                 session.flush()
-                for position, recipe_id in enumerate(menu["items"], start=1):
-                    recipe = session.get(Recipe, recipe_id)
-                    component = recipe.category if recipe is not None else ("main" if position == 1 else "side")
-                    session.add(
-                        HistoricalMenuItem(
-                            historical_menu_id=hist.id,
-                            recipe_id=recipe_id,
-                            position=position,
-                            meal_slot=component,
-                        )
-                    )
+                _replace_historical_menu_items(session, hist, menu)
         else:
             for index, row in enumerate(HISTORICAL_MENUS, start=1):
                 hist = session.get(HistoricalMenu, index)
                 if hist is None:
                     continue
-                for field in ["program_type", "meal_type", "menu_coverage", "diet_type", "menu_duration_type", "meal_served_format", "menu_tags", "cycle", "days_per_week", "contracts", "sample_category"]:
-                    value = getattr(hist, field, None)
-                    if field == "days_per_week" or value in (None, [], ""):
-                        setattr(hist, field, row[field])
+                _sync_historical_menu_metadata(hist, row)
+                _replace_historical_menu_items(session, hist, row)
         if session.scalar(select(Menu.id).limit(1)) is None:
             for menu_row in SAVED_MENUS:
                 menu = Menu(

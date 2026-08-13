@@ -191,7 +191,7 @@ a { color: inherit; text-decoration: none; }
 }
 .planner-cycle-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(430px, 1fr) auto minmax(390px, 0.8fr);
   gap: 12px;
   align-items: end;
 }
@@ -206,6 +206,20 @@ a { color: inherit; text-decoration: none; }
 }
 .service-pattern-panel {
   min-width: 154px;
+}
+.cycle-action-panel {
+  min-width: 0;
+}
+.cycle-action-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(130px, 1fr) minmax(130px, 1fr);
+  gap: 7px;
+  align-items: stretch;
+}
+.cycle-action-row .secondary-button {
+  min-height: 42px;
+  padding: 9px 11px;
+  white-space: nowrap;
 }
 .segmented-control.cycle-tabs {
   display: grid;
@@ -223,6 +237,8 @@ a { color: inherit; text-decoration: none; }
   margin-top: 12px;
 }
 .gallery-favorite-filter { align-self: end; min-height: 42px; }
+.gallery-add-filter { align-self: end; min-height: 42px; }
+.clear-day-control { min-width: 156px; }
 .swap-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
@@ -338,6 +354,14 @@ a { color: inherit; text-decoration: none; }
 .meal-label-title { font-weight: 800; color: var(--brand); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
 .meal-label-subtitle { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.25; }
 .planner-layout { display: grid; gap: 18px; grid-template-columns: minmax(720px, 1fr) minmax(420px, 460px); align-items: flex-start; }
+.planner-layout.planner-layout-seven-day { grid-template-columns: minmax(0, 1fr); }
+.planner-layout.planner-layout-seven-day .planner-sidebar {
+  position: static;
+  max-height: none;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+}
+.planner-layout.planner-layout-seven-day .planner-gallery-panel,
+.planner-layout.planner-layout-seven-day .planner-details-panel { max-height: 680px; }
 .calendar-panel { min-width: 0; }
 .planner-sidebar {
   min-width: 0;
@@ -371,6 +395,10 @@ a { color: inherit; text-decoration: none; }
 .resource-summary-card { display: grid; gap: 8px; }
 .scheduled-card { min-width: 0; }
 .scheduled-card strong, .table-main strong, .recipe-card strong { word-break: break-word; }
+.scheduled-card-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.copy-item-details { margin-top: 2px; font-size: 10px; color: var(--muted); }
+.copy-item-details summary { cursor: pointer; color: var(--brand); font-weight: 700; }
+.copy-item-week-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .topbar, .hero, .card, .metric-card, .section {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -526,6 +554,13 @@ a { color: inherit; text-decoration: none; }
 .recipes-filters { display: grid; gap: 14px; padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,0.84); position: sticky; top: 18px; }
 .recipes-main { display: grid; gap: 16px; }
 .filter-group { display: grid; gap: 10px; }
+.compact-filter-select {
+  min-height: 42px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
 .filter-chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .recipes-filters .toggle-row,
 .recipes-filters .filter-chip-grid {
@@ -605,27 +640,39 @@ a { color: inherit; text-decoration: none; }
   background: #b45309;
   color: #fffaf1;
 }
+.compact-page-size {
+  min-width: 78px;
+  min-height: 36px;
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
 .table-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .menu-table-row { grid-template-columns: minmax(0, 2fr) 100px 140px 90px auto; }
 .recipe-table-row { grid-template-columns: minmax(0, 2.2fr) 120px 120px 110px 110px 140px; }
 .recipe-registry-wrap {
   margin-top: 0;
 }
-.recipe-registry-table {
-  min-width: 1080px;
+.admin-table.recipe-registry-table {
+  min-width: 800px;
   table-layout: fixed;
 }
-.recipe-registry-table th:nth-child(1) { width: 40%; }
-.recipe-registry-table th:nth-child(2),
-.recipe-registry-table th:nth-child(3),
-.recipe-registry-table th:nth-child(4),
-.recipe-registry-table th:nth-child(5),
-.recipe-registry-table th:nth-child(6) { width: 10%; }
-.recipe-registry-table th:last-child { width: 10%; }
+.recipe-registry-table th:nth-child(1) { width: 28%; }
+.recipe-registry-table th:nth-child(2) { width: 36%; }
+.recipe-registry-table th:nth-child(3) { width: 13%; }
+.recipe-registry-table th:nth-child(4) { width: 14%; }
+.recipe-registry-table th:nth-child(5) { width: 9%; }
 .recipe-registry-table td {
   vertical-align: middle;
 }
-.recipe-registry-table td:not(:first-child) {
+.recipe-registry-table td:nth-child(3),
+.recipe-registry-table td:nth-child(4),
+.recipe-registry-table td:nth-child(5) {
   white-space: nowrap;
 }
 .recipe-registry-name {
@@ -633,8 +680,32 @@ a { color: inherit; text-decoration: none; }
   gap: 6px;
   min-width: 0;
 }
-.recipe-registry-name strong {
+.recipe-registry-name strong,
+.recipe-registry-link {
   overflow-wrap: anywhere;
+}
+.recipe-registry-link {
+  color: var(--text);
+  font-weight: 900;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.recipe-registry-link:hover {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.recipe-one-line-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  line-height: 1.42;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.recipe-registry-table .table-actions {
+  justify-content: flex-start;
 }
 .compact-tags {
   gap: 6px;
@@ -764,6 +835,20 @@ a { color: inherit; text-decoration: none; }
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
+}
+.admin-recipe-entry-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+.admin-recipe-entry-sidebar {
+  position: sticky;
+  top: 18px;
+}
+.admin-save-panel {
+  display: grid;
+  gap: 10px;
 }
 .recipe-form-nav-panel {
   position: sticky;
@@ -979,6 +1064,46 @@ a { color: inherit; text-decoration: none; }
   padding: 5px 7px;
   font-size: 10px;
 }
+.nutrition-compact-heading { margin: 12px 0 8px; }
+.selected-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.filter-chip {
+  border: 1px solid rgba(180, 83, 9, 0.28);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: rgba(249, 115, 22, 0.10);
+  color: #9a3412;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.text-button { border: 0; background: transparent; color: var(--brand); font: inherit; cursor: pointer; text-decoration: underline; }
+.app-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(31, 41, 55, 0.44);
+  backdrop-filter: blur(3px);
+}
+.app-modal {
+  width: min(900px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 26px 70px rgba(31, 41, 55, 0.24);
+}
+.recipe-preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; }
+.compact-list { display: grid; gap: 7px; margin: 8px 0 0; padding-left: 22px; }
+.recipe-preview-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: center; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.nutrition-full-modal { width: min(1280px, 100%); }
+.nutrition-full-modal > .nutrition-review { box-shadow: none; margin-top: 16px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .admin-table-wrap {
   overflow: auto;
   max-width: 100%;
@@ -1040,6 +1165,12 @@ a { color: inherit; text-decoration: none; }
   gap: 6px;
 }
 .reports-layout { grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr); }
+.report-preview { display: grid; gap: 16px; }
+.report-result-table { min-width: 900px; }
+.report-menu-detail { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--line); }
+.report-nutrition-row { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; }
+.report-nutrient { display: grid; gap: 6px; align-content: start; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.76); }
+.report-item-table { min-width: 660px; }
 .review-comment-layout { grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr); }
 .review-history-table { min-width: 860px; }
 .recipe-review-layout { display: grid; grid-template-columns: 310px minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
@@ -1616,6 +1747,299 @@ button.comment-metric-card {
 .facts-serving { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #111827; }
 .facts-calories { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 4px solid #111827; font-size: 22px; font-weight: 900; }
 .facts-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid #111827; font-size: 14px; }
+
+.facts-calories-label,
+.facts-daily-value {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.facts-daily-value {
+  text-align: right;
+  border-bottom: 4px solid #111827;
+  padding: 4px 0;
+}
+
+.facts-indent span:first-child {
+  padding-left: 14px;
+}
+
+.facts-footnote {
+  font-size: 10px;
+  line-height: 1.25;
+  padding-top: 7px;
+}
+
+.nutrition-analysis-section {
+  break-inside: avoid;
+}
+
+.sortable-column {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+  cursor: pointer;
+}
+
+.selected-filter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.selected-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e9b98e;
+  border-radius: 5px;
+  background: #fff3e8;
+  color: #853300;
+  padding: 6px 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.text-action {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--brand-dark);
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.recipe-one-line-description {
+  display: block;
+  max-width: 660px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.inline-settings-details {
+  min-width: 220px;
+}
+
+.inline-settings-details summary {
+  cursor: pointer;
+  color: var(--brand-dark);
+  font-weight: 750;
+}
+
+.category-visibility-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.category-add-panel {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.4fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffaf5;
+}
+
+.category-add-panel strong,
+.category-add-panel .muted {
+  grid-column: 1 / -1;
+}
+
+.checkbox-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.home-update-form {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffaf5;
+}
+
+.home-update-form textarea,
+.home-update-form .file-upload-control {
+  grid-column: 1 / -1;
+}
+
+.home-update-form .home-update-article-input {
+  min-height: 180px;
+}
+
+.home-story-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.home-story-card {
+  display: grid;
+  min-height: 112px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.home-story-card.with-image {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.home-story-card.without-image {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-story-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-story-content {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.home-story-content p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.home-story-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.home-story-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.home-story-heading .status-badge {
+  flex: 0 0 auto;
+}
+
+.home-story-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.text-link {
+  color: var(--brand-dark);
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.home-article-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.home-article-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.home-article-header h1 {
+  margin: 8px 0;
+}
+
+.home-article-image {
+  width: 100%;
+  max-height: 430px;
+  margin-top: 24px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.home-article-summary {
+  max-width: 760px;
+  margin: 28px 0 18px;
+  color: var(--ink);
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.home-article-body {
+  max-width: 760px;
+  color: var(--ink-muted);
+  font-size: 1.05rem;
+  line-height: 1.75;
+  white-space: pre-line;
+}
+
+@media print {
+  .app-header,
+  .secondary-nav,
+  .hero-actions,
+  .recipe-fields-panel,
+  button,
+  .button,
+  .ghost-button,
+  .secondary-button {
+    display: none !important;
+  }
+
+  body,
+  .page-shell,
+  .section {
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+}
+.print-queue-list { display: grid; gap: 12px; }
+.print-queue-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+}
+.print-queue-item h3 { margin: 8px 0 4px; }
+.print-queue-item p { margin: 0 0 5px; }
+@media (max-width: 720px) {
+  .print-queue-item { align-items: flex-start; flex-direction: column; }
+  .home-article-header { flex-direction: column; }
+  .home-story-card.with-image { grid-template-columns: 1fr; }
+  .home-story-image { max-height: 220px; }
+}
 .planner-toolbar button, .planner-toolbar .ghost-button, .planner-toolbar .button, .planner-toolbar .pill,
 .planner-layout button, .planner-layout .ghost-button, .planner-layout .button, .planner-layout .pill {
   position: relative;
@@ -1730,7 +2154,7 @@ button.comment-metric-card {
 .recipe-card-head .meal-badge { flex: 0 0 auto; }
 .recipe-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .tag-chip { display: inline-flex; align-items: center; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: 700; color: #9a3412; background: rgba(249, 115, 22, 0.10); white-space: nowrap; }
-.calendar-grid { display: grid; gap: 7px; margin-top: 12px; width: max-content; min-width: 100%; }
+.calendar-grid { display: grid; gap: 7px; margin-top: 12px; width: 100%; min-width: 880px; }
 .calendar-corner { min-height: 50px; }
 .calendar-day-header, .meal-label, .calendar-cell { border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.84); }
 .calendar-day-header { padding: 9px 10px; min-height: 50px; background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(251, 243, 229, 0.88)); }
@@ -1981,19 +2405,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 960px) {
-  .hero-grid, .planner-header, .planner-toolbar, .planner-layout, .planner-command-row, .planner-cycle-row, .setup-grid, .setup-options, .planner-sidebar, .planner-hero-grid, .recipe-grid, .recipe-strip, .recipe-submission-layout, .choice-card-grid, .form-grid-two, .form-grid-three, .nutrition-input-grid, .columns, .cols-2, .cols-3, .summary-grid, .nutrition-review-grid, .recipes-layout, .resources-layout, .resources-file-layout, .provider-resource-layout, .reports-layout, .review-comment-layout, .review-perspective-controls, .review-admin-tool-grid, .resources-hero-grid, .resource-detail-grid, .resource-nav-panel, .resource-add-panel, .resource-add-form, .table-row, .todo-row, .menu-table-row, .recipe-table-row, .sample-menu-row, .sample-browser-layout, .planner-gallery-row, .planner-recipe-grid, .recipe-metrics, .report-form, .compact-form, .legacy-tile-grid, .legacy-accordion-grid, .gallery-filter-grid, .swap-row, .sample-mini-calendar, .meal-comparison-grid, .recipe-review-layout, .recipe-review-summary, .recipe-review-content-grid, .recipe-detail-two, .recipe-nutrition-summary, .recipe-review-record-grid, .recipe-review-record-row, .recipe-review-field-row { grid-template-columns: 1fr; }
+  .hero-grid, .planner-header, .planner-toolbar, .planner-layout, .planner-command-row, .planner-cycle-row, .setup-grid, .setup-options, .planner-sidebar, .planner-hero-grid, .recipe-grid, .recipe-strip, .recipe-submission-layout, .admin-recipe-entry-layout, .choice-card-grid, .form-grid-two, .form-grid-three, .nutrition-input-grid, .columns, .cols-2, .cols-3, .summary-grid, .nutrition-review-grid, .recipes-layout, .resources-layout, .resources-file-layout, .provider-resource-layout, .reports-layout, .review-comment-layout, .review-perspective-controls, .review-admin-tool-grid, .resources-hero-grid, .resource-detail-grid, .resource-nav-panel, .resource-add-panel, .resource-add-form, .table-row, .todo-row, .menu-table-row, .recipe-table-row, .sample-menu-row, .sample-browser-layout, .planner-gallery-row, .planner-recipe-grid, .recipe-metrics, .report-form, .compact-form, .legacy-tile-grid, .legacy-accordion-grid, .gallery-filter-grid, .swap-row, .sample-mini-calendar, .meal-comparison-grid, .recipe-review-layout, .recipe-review-summary, .recipe-review-content-grid, .recipe-detail-two, .recipe-nutrition-summary, .recipe-review-record-grid, .recipe-review-record-row, .recipe-review-field-row { grid-template-columns: 1fr; }
   .segmented-control.cycle-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .planner-meta { justify-content: flex-start; max-width: none; }
   .topbar { flex-direction: column; align-items: stretch; }
   .topbar-actions { justify-content: flex-start; }
   .role-switcher { justify-content: space-between; }
   .sample-calendar-card-head { flex-direction: column; }
+  .recipe-preview-grid { grid-template-columns: 1fr; }
+  .app-modal-backdrop { padding: 10px; }
+  .app-modal { max-height: calc(100vh - 20px); padding: 16px; }
   .workspace-banner-top, .workspace-summary { grid-template-columns: 1fr; flex-direction: column; }
   .recipes-filters { position: static; }
   .resource-row-meta { justify-items: start; }
   .todo-meta { justify-items: start; }
   .resource-nav-panel { position: static; }
   .recipe-form-nav-panel { position: static; }
+  .admin-recipe-entry-sidebar { position: static; }
   .review-comment-side-panel { position: static; }
   .sample-preview-panel { position: static; }
   .recipe-review-queue, .recipe-review-side { position: static; max-height: none; }
@@ -2003,6 +2431,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 1320px) {
+  .planner-cycle-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cycle-action-panel {
+    grid-column: 1 / -1;
+  }
   .review-comment-layout {
     grid-template-columns: 1fr;
   }

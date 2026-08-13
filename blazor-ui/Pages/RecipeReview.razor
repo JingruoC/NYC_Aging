@@ -59,7 +59,7 @@
                     </div>
 
                     <div class="recipe-review-filters">
-                        <InputText class="input compact-input" @bind-Value="SearchText" @bind-Value:event="oninput" placeholder="Search recipe, provider, tag" />
+                        <input class="input compact-input" @bind="SearchText" @bind:event="oninput" placeholder="Search recipe, provider, tag" />
                         <label>
                             <div class="small muted">Status</div>
                             <InputSelect class="input compact-input" @bind-Value="StatusFilter">
@@ -172,16 +172,59 @@
                         <section class="section">
                             <div class="section-header">
                                 <div>
+                                    <h3 style="margin-bottom: 6px">Uploaded files and exports</h3>
+                                    <p class="muted" style="margin: 0">Open the provider's original label or analysis, or export the stored submission data to Excel.</p>
+                                </div>
+                                <div class="hero-actions">
+                                    <a class="ghost-button" href="@($"/downloads/recipes/{SelectedRecipe.RecipeId}/exports/submission")">Export submission</a>
+                                    <a class="ghost-button" href="@($"/downloads/recipes/{SelectedRecipe.RecipeId}/exports/nutrition")">Export nutrition</a>
+                                </div>
+                            </div>
+                            @if (!RecipeAttachments.Any())
+                            {
+                                <div class="empty-state compact-empty" style="margin-top: 12px">No source files were uploaded with this submission.</div>
+                            }
+                            else
+                            {
+                                <div class="admin-table-wrap" style="margin-top: 12px">
+                                    <table class="admin-table compact-admin-table">
+                                        <thead>
+                                            <tr>
+                                                <th>File</th>
+                                                <th>Type</th>
+                                                <th>Uploaded</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var attachment in RecipeAttachments)
+                                            {
+                                                <tr>
+                                                    <td><strong>@attachment.FileName</strong><div class="small muted">@FormatFileSize(attachment.FileSize)</div></td>
+                                                    <td>@AttachmentKindLabel(attachment.FileKind)</td>
+                                                    <td>@attachment.UploadedAt.ToString("MMM d, yyyy")</td>
+                                                    <td>
+                                                        <div class="table-actions">
+                                                            <a class="quiet-action" target="_blank" href="@($"/downloads/recipes/{SelectedRecipe.RecipeId}/attachments/{attachment.Id}?download=false")">Open</a>
+                                                            <a class="quiet-action" href="@($"/downloads/recipes/{SelectedRecipe.RecipeId}/attachments/{attachment.Id}?download=true")">Download</a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </section>
+
+                        <section class="section">
+                            <div class="section-header">
+                                <div>
                                     <h3 style="margin-bottom: 6px">Recipe content</h3>
                                     <p class="muted" style="margin: 0">Provider-submitted ingredients, directions when applicable, and form fields. Nutrition values are summarized above.</p>
                                 </div>
                                 <div class="hero-actions">
-                                    @if (IsEditingRecipe)
-                                    {
-                                        <button type="button" class="secondary-button" @onclick="SaveRecipeEdits" disabled="@_saving">Save edits</button>
-                                        <button type="button" class="ghost-button" @onclick="CancelRecipeEdit" disabled="@_saving">Cancel</button>
-                                    }
-                                    else
+                                    @if (!IsEditingRecipe)
                                     {
                                         <button type="button" class="ghost-button" @onclick="BeginRecipeEdit">Edit submitted fields</button>
                                     }
@@ -201,11 +244,11 @@
                                     <div class="form-grid-two">
                                         <label>
                                             <div class="small muted">Recipe name</div>
-                                            <InputText class="input" @bind-Value="EditDraft.RecipeName" />
+                                            <input class="input" @bind="EditDraft.RecipeName" @bind:event="oninput" />
                                         </label>
                                         <label>
                                             <div class="small muted">Provider / submitter</div>
-                                            <InputText class="input" @bind-Value="EditDraft.ContributedBy" />
+                                            <input class="input" @bind="EditDraft.ContributedBy" @bind:event="oninput" />
                                         </label>
                                         <label>
                                             <div class="small muted">Meal type</div>
@@ -227,7 +270,7 @@
                                         </label>
                                         <label>
                                             <div class="small muted">Serving size</div>
-                                            <InputText class="input" @bind-Value="EditDraft.ServingSize" />
+                                            <input class="input" @bind="EditDraft.ServingSize" @bind:event="oninput" />
                                         </label>
                                         <label>
                                             <div class="small muted">Yield / servings</div>
@@ -265,24 +308,24 @@
                                     <div class="form-grid-two">
                                         <label>
                                             <div class="small muted">@IngredientSectionTitle(SelectedRecipe)</div>
-                                            <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.IngredientsText" />
+                                            <textarea class="input recipe-textarea compact" @bind="EditDraft.IngredientsText" @bind:event="oninput"></textarea>
                                         </label>
                                         <label>
                                             <div class="small muted">Directions</div>
-                                            <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.InstructionsText" />
+                                            <textarea class="input recipe-textarea compact" @bind="EditDraft.InstructionsText" @bind:event="oninput"></textarea>
                                         </label>
                                         <label>
                                             <div class="small muted">Submission fields</div>
-                                            <InputTextArea class="input recipe-textarea" @bind-Value="EditDraft.SubmissionFieldsText" />
+                                            <textarea class="input recipe-textarea" @bind="EditDraft.SubmissionFieldsText" @bind:event="oninput"></textarea>
                                         </label>
                                         <div class="recipe-edit-meta">
                                             <label>
                                                 <div class="small muted">Tags</div>
-                                                <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.TagsText" />
+                                                <textarea class="input recipe-textarea compact" @bind="EditDraft.TagsText" @bind:event="oninput"></textarea>
                                             </label>
                                             <label>
                                                 <div class="small muted">Nutrient claims</div>
-                                                <InputTextArea class="input recipe-textarea compact" @bind-Value="EditDraft.NutrientClaimsText" />
+                                                <textarea class="input recipe-textarea compact" @bind="EditDraft.NutrientClaimsText" @bind:event="oninput"></textarea>
                                             </label>
                                             <label class="checkbox-chip">
                                                 <InputCheckbox @bind-Value="EditDraft.IsPublic" />
@@ -531,6 +574,7 @@
     private bool _saving;
     private List<RecipeDto> Recipes { get; set; } = [];
     private List<RecipeReviewCommentDto> ReviewComments { get; set; } = [];
+    private List<RecipeAttachmentDto> RecipeAttachments { get; set; } = [];
     private RecipeDto? SelectedRecipe { get; set; }
     private string SearchText { get; set; } = string.Empty;
     private string StatusFilter { get; set; } = PendingFilter;
@@ -544,7 +588,7 @@
     private string? EditMessage { get; set; }
     private RecipeEditDraft EditDraft { get; set; } = new();
     private RecipeCommentTarget SelectedTarget { get; set; } = OverallTarget;
-    private bool IsAdmin => CurrentRole == AppRole.Admin || AppMode.IsAdmin;
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
 
     private IReadOnlyList<RecipeCommentTarget> RecipeCommentTargets =>
         SelectedRecipe is null
@@ -680,10 +724,38 @@
 
     private async Task LoadCommentsForSelectedRecipe()
     {
-        ReviewComments = SelectedRecipe is null
-            ? []
-            : await Api.GetRecipeCommentsAsync(SelectedRecipe.RecipeId);
+        if (SelectedRecipe is null)
+        {
+            ReviewComments = [];
+            RecipeAttachments = [];
+            return;
+        }
+
+        await Task.WhenAll(
+            LoadRecipeComments(SelectedRecipe.RecipeId),
+            LoadRecipeAttachments(SelectedRecipe.RecipeId));
     }
+
+    private async Task LoadRecipeComments(int recipeId) =>
+        ReviewComments = await Api.GetRecipeCommentsAsync(recipeId);
+
+    private async Task LoadRecipeAttachments(int recipeId) =>
+        RecipeAttachments = await Api.GetRecipeAttachmentsAsync(recipeId);
+
+    private static string AttachmentKindLabel(string kind) => kind switch
+    {
+        "recipe_source" => "Recipe source",
+        "nutrition_analysis" => "Nutrition analysis",
+        "product_label" => "Product label",
+        _ => "Supporting document"
+    };
+
+    private static string FormatFileSize(long size) => size switch
+    {
+        >= 1024 * 1024 => $"{size / 1024d / 1024d:0.0} MB",
+        >= 1024 => $"{size / 1024d:0.0} KB",
+        _ => $"{size} bytes"
+    };
 
     private void BeginRecipeEdit()
     {
@@ -1159,7 +1231,16 @@
             IsDead = recipe.IsDead,
             NutrientClaims = [.. recipe.NutrientClaims],
             VitaminCMg = recipe.VitaminCMg,
-            CalciumMg = recipe.CalciumMg
+            CalciumMg = recipe.CalciumMg,
+            SaturatedFatG = recipe.SaturatedFatG,
+            TransFatG = recipe.TransFatG,
+            CholesterolMg = recipe.CholesterolMg,
+            CarbohydratesG = recipe.CarbohydratesG,
+            TotalSugarsG = recipe.TotalSugarsG,
+            AddedSugarsG = recipe.AddedSugarsG,
+            VitaminDMcg = recipe.VitaminDMcg,
+            IronMg = recipe.IronMg,
+            PotassiumMg = recipe.PotassiumMg
         };
 
     private sealed record ReviewOption(string Key, string Label);
@@ -1178,6 +1259,15 @@
         public decimal FatG { get; set; }
         public decimal VitaminCMg { get; set; }
         public decimal CalciumMg { get; set; }
+        public decimal SaturatedFatG { get; set; }
+        public decimal TransFatG { get; set; }
+        public decimal CholesterolMg { get; set; }
+        public decimal CarbohydratesG { get; set; }
+        public decimal TotalSugarsG { get; set; }
+        public decimal AddedSugarsG { get; set; }
+        public decimal VitaminDMcg { get; set; }
+        public decimal IronMg { get; set; }
+        public decimal PotassiumMg { get; set; }
         public string ServingSize { get; set; } = string.Empty;
         public int YieldServings { get; set; } = 1;
         public string ContributedBy { get; set; } = string.Empty;
@@ -1200,6 +1290,15 @@
             FatG = recipe.FatG,
             VitaminCMg = recipe.VitaminCMg,
             CalciumMg = recipe.CalciumMg,
+            SaturatedFatG = recipe.SaturatedFatG,
+            TransFatG = recipe.TransFatG,
+            CholesterolMg = recipe.CholesterolMg,
+            CarbohydratesG = recipe.CarbohydratesG,
+            TotalSugarsG = recipe.TotalSugarsG,
+            AddedSugarsG = recipe.AddedSugarsG,
+            VitaminDMcg = recipe.VitaminDMcg,
+            IronMg = recipe.IronMg,
+            PotassiumMg = recipe.PotassiumMg,
             ServingSize = recipe.ServingSize ?? string.Empty,
             YieldServings = Math.Max(1, recipe.YieldServings),
             ContributedBy = recipe.ContributedBy ?? string.Empty,

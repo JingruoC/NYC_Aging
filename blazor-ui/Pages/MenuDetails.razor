@@ -4,10 +4,21 @@
 @inject MenuDraftService Drafts
 @inject IJSRuntime Js
 @inject AppModeService AppMode
+@inject PrintQueueService PrintQueue
 @implements IAsyncDisposable
 
 <div class="grid" style="gap: 18px" @ref="_pageRoot">
-    @if (Menu is null)
+    @if (_accessDenied)
+    {
+        <section class="section">
+            <div class="empty-state">
+                <strong>This menu is not available for the selected provider.</strong>
+                <div class="muted small" style="margin-top: 6px">Providers can open only their own submitted, returned, approved, or completed menus.</div>
+                <a class="secondary-button" style="margin-top: 14px" href="/menus/list">Return to My Menus</a>
+            </div>
+        </section>
+    }
+    else if (Menu is null)
     {
         <section class="section">
             <div class="empty-state">Loading menu…</div>
@@ -27,6 +38,7 @@
                 </div>
                 <div class="hero-actions menu-detail-actions">
                     <StatusPill Status="@Menu.Analysis.OverallStatus" Label="@Menu.Analysis.OverallStatus" />
+                    <button type="button" class="ghost-button compact-action" @onclick="AddMenuToPrintQueue">Add to print queue</button>
                     @if (IsAdmin)
                     {
                         <button type="button" class="@($"{(MenuDetailsTab == CommentsTab ? "button" : "ghost-button")} compact-action")" @onclick="() => SetMenuDetailsTab(CommentsTab)">Review</button>
@@ -39,6 +51,10 @@
                     }
                 </div>
             </div>
+            @if (!string.IsNullOrWhiteSpace(MenuActionMessage))
+            {
+                <div class="empty-state compact-empty" style="margin-top: 12px; text-align: left">@MenuActionMessage</div>
+            }
         </section>
 
         @if (MenuDetailsTab == ReviewTab && IsAdmin)
@@ -529,6 +545,7 @@
     [CascadingParameter] public AppRole CurrentRole { get; set; }
 
     private MenuDetailDto? Menu { get; set; }
+    private bool _accessDenied;
     private ElementReference _pageRoot;
     private IJSObjectReference? _dragDropModule;
     private DotNetObjectReference<MenuDetails>? _dotNetRef;
@@ -556,6 +573,7 @@
     private string ReviewMealScope { get; set; } = AllMealsScope;
     private string NewCommentBody { get; set; } = string.Empty;
     private string? CommentMessage { get; set; }
+    private string? MenuActionMessage { get; set; }
     private bool ShowMenuCommentSummary { get; set; }
     private string? MenuCommentSummaryMessage { get; set; }
     private int? DragDraftIndex { get; set; }
@@ -746,6 +764,18 @@
     }
 
     private void GoToMenuBuilder() => Navigation.NavigateTo("/menus/new");
+
+    private void AddMenuToPrintQueue()
+    {
+        if (Menu is null)
+        {
+            return;
+        }
+
+        var detail = $"{Menu.Menu.ContractName ?? "No contract"} · {Menu.Menu.MealType} · Week {Menu.Menu.CycleWeek}";
+        var added = PrintQueue.Add("Menu", Menu.Menu.Name, $"/menus/{Menu.Menu.Id}", detail);
+        MenuActionMessage = added ? "Menu added to the print queue." : "Menu is already in the print queue.";
+    }
 
     private bool CanUseMenuDetailsTab(string tab) =>
         tab.Equals(CommentsTab, StringComparison.OrdinalIgnoreCase)
@@ -1727,7 +1757,17 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        _accessDenied = false;
         Menu = await Api.GetMenuAsync(MenuId);
+        if (Menu is not null && IsProvider && !AppMode.CanProviderSeeMenu(Menu.Menu))
+        {
+            Menu = null;
+            _accessDenied = true;
+            AllMenus = [];
+            ReviewComments = [];
+            return;
+        }
+
         AllMenus = await Api.GetMenusAsync();
         if (Menu is not null)
         {

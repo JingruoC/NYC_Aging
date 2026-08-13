@@ -42,6 +42,28 @@ public sealed class AppModeService
         return matchesContract && visibleStatus;
     }
 
+    public bool CanProviderSeeMenu(MenuDetailMenuDto menu)
+    {
+        if (IsAdmin)
+        {
+            return true;
+        }
+
+        var matchesContract = (menu.ContractName ?? string.Empty).Equals(ProviderContract, StringComparison.OrdinalIgnoreCase)
+            || menu.Contracts.Any(contract => contract.Equals(ProviderContract, StringComparison.OrdinalIgnoreCase));
+        var visibleStatus = ProviderMenuStatuses.Contains(menu.Status, StringComparer.OrdinalIgnoreCase)
+            || ProviderDraftStatuses.Contains(menu.Status, StringComparer.OrdinalIgnoreCase);
+        return matchesContract && visibleStatus;
+    }
+
+    private static readonly string[] ProviderDraftStatuses =
+    [
+        "Draft",
+        "Incomplete",
+        "Pending review",
+        "Returned for Correction"
+    ];
+
     public static readonly string[] ProviderMenuStatuses =
     [
         "Submitted to Contract(s) for Review",

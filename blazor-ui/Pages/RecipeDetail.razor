@@ -2,23 +2,30 @@
 @page "/recipes/{RecipeId:int}/edit"
 @inject PythonApiClient Api
 @inject NavigationManager Navigation
+@inject AppModeService AppMode
+@inject IJSRuntime Js
+@inject PrintQueueService PrintQueue
 
 <div class="grid" style="gap: 18px">
     <section class="section">
         <div class="section-header">
             <div>
                 <div class="eyebrow">Recipe detail</div>
-                <h2 style="margin-bottom: 6px">@((IsEditRoute ? "Edit recipe" : "View recipe"))</h2>
+                <h2 style="margin-bottom: 6px">@((IsEditing ? "Edit recipe" : "View recipe"))</h2>
                 <p class="muted" style="margin: 0">Recipe record, ingredients, scaling, tags, and nutrition values.</p>
             </div>
             <div class="hero-actions">
                 <a class="ghost-button" href="/recipes">Back to recipes</a>
-                @if (!IsEditRoute)
+                @if (!IsEditing)
                 {
                     <button type="button" class="ghost-button" @onclick="PrintRecipe">Print Recipe</button>
+                    <button type="button" class="ghost-button" @onclick="AddRecipeToPrintQueue">Add to print queue</button>
                     <button type="button" class="ghost-button" @onclick="ToggleFavorite">@(_editRecipe.IsFavorite ? "Remove from my favorite" : "Add to my favorite")</button>
-                    <button type="button" class="secondary-button" @onclick="DeleteRecipe">Delete</button>
-                    <a class="button" href="@($"/recipes/{RecipeId}/edit")">Edit recipe</a>
+                    @if (IsAdmin)
+                    {
+                        <button type="button" class="secondary-button" @onclick="ArchiveRecipe">Archive</button>
+                        <a class="button" href="@($"/recipes/{RecipeId}/edit")">Edit recipe</a>
+                    }
                 }
                 else
                 {
@@ -34,6 +41,10 @@
         else if (_recipe is null)
         {
             <div class="empty-state">Recipe not found.</div>
+        }
+        else if (!IsAdmin && (!_recipe.IsPublic || !_recipe.IsApproved || _recipe.IsDead))
+        {
+            <div class="empty-state">This recipe is not available in the provider catalog.</div>
         }
         else
         {
@@ -109,14 +120,6 @@
                             <span>Contributed by</span>
                             <span>@(_recipe.ContributedBy ?? "N/A")</span>
                         </div>
-                        <div class="status-row">
-                            <span>Categories</span>
-                            <span>@CategoryBreadcrumb</span>
-                        </div>
-                        <div class="status-row">
-                            <span>Rating</span>
-                            <span>☆☆☆☆☆</span>
-                        </div>
                     </div>
 
                     @if (!string.IsNullOrWhiteSpace(_actionMessage))
@@ -124,6 +127,8 @@
                         <div class="empty-state" style="padding: 10px 12px; margin-top: 12px">@_actionMessage</div>
                     }
 
+                    @if (IsAdmin)
+                    {
                     <div class="section" style="margin-top: 16px">
                         <div class="section-header">
                             <div>
@@ -135,70 +140,75 @@
                         <div class="planner-form-grid">
                             <div>
                                 <div class="small muted">Recipe name</div>
-                                <InputText class="input" @bind-Value="_editRecipe.RecipeName" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_editRecipe.RecipeName" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Meal type</div>
-                                <InputText class="input" @bind-Value="_editRecipe.MealType" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_editRecipe.MealType" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Category</div>
-                                <InputText class="input" @bind-Value="_editRecipe.Category" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_editRecipe.Category" disabled="@(!IsEditing)" />
+                            </div>
+                            <div>
+                                <div class="small muted">Recipe contributor</div>
+                                <InputText class="input" @bind-Value="_editRecipe.ContributedBy" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Approved</div>
-                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsApproved" disabled="@(!IsEditRoute)" />
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsApproved" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Calories</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.Calories" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.Calories" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Sodium mg</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.SodiumMg" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.SodiumMg" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Protein g</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.ProteinG" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.ProteinG" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Fiber g</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.FiberG" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.FiberG" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Fat g</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.FatG" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.FatG" disabled="@(!IsEditing)" />
                             </div>
                             <div style="grid-column: 1 / -1">
                                 <div class="small muted">Tags, comma separated</div>
-                                <InputText class="input" @bind-Value="_tagsText" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_tagsText" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Serving size</div>
-                                <InputText class="input" @bind-Value="_editRecipe.ServingSize" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_editRecipe.ServingSize" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Yield servings</div>
-                                <InputNumber class="input" @bind-Value="_editRecipe.YieldServings" disabled="@(!IsEditRoute)" />
+                                <InputNumber class="input" @bind-Value="_editRecipe.YieldServings" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Favorite</div>
-                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsFavorite" disabled="@(!IsEditRoute)" />
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsFavorite" disabled="@(!IsEditing)" />
                             </div>
                             <div>
                                 <div class="small muted">Public</div>
-                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsPublic" disabled="@(!IsEditRoute)" />
+                                <InputCheckbox class="input" @bind-Value="_editRecipe.IsPublic" disabled="@(!IsEditing)" />
                             </div>
                             <div style="grid-column: 1 / -1">
                                 <div class="small muted">Ingredients, comma separated</div>
-                                <InputText class="input" @bind-Value="_ingredientsText" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_ingredientsText" disabled="@(!IsEditing)" />
                             </div>
                             <div style="grid-column: 1 / -1">
                                 <div class="small muted">Nutrient claims, comma separated</div>
-                                <InputText class="input" @bind-Value="_claimsText" disabled="@(!IsEditRoute)" />
+                                <InputText class="input" @bind-Value="_claimsText" disabled="@(!IsEditing)" />
                             </div>
                         </div>
                     </div>
+                    }
                 </section>
 
                 <section class="section">
@@ -225,6 +235,10 @@
                             <div class="small muted">Fiber</div>
                             <div class="summary-value">@_editRecipe.FiberG g</div>
                         </div>
+                        <div class="workspace-summary-item">
+                            <div class="small muted">Fat</div>
+                            <div class="summary-value">@_editRecipe.FatG g</div>
+                        </div>
                     </div>
 
                     <div class="section" style="margin-top: 16px">
@@ -237,7 +251,7 @@
                         <div class="report-form compact-form">
                             <label>
                                 <div class="small muted">Serving count</div>
-                                <InputNumber class="input" @bind-Value="_scaleServings" />
+                                <input type="number" class="input" min="1" @bind="_scaleServings" @bind:event="oninput" />
                             </label>
                             <button type="button" class="button" @onclick="ScaleRecipe">Go</button>
                         </div>
@@ -256,30 +270,6 @@
                                 }
                             </div>
                         }
-                    </div>
-
-                    <div class="section" style="margin-top: 16px">
-                        <div class="section-header">
-                            <div>
-                                <h3 style="margin-bottom: 6px">Nutrition Facts</h3>
-                                <p class="muted" style="margin: 0">Serving Size @(_recipe.ServingSize ?? "1 serving")</p>
-                            </div>
-                        </div>
-                        <div class="nutrition-facts-label">
-                            <div class="facts-title">Nutrition Facts</div>
-                            <div class="facts-serving">Serving Size @(_recipe.ServingSize ?? "1 serving")</div>
-                            <div class="facts-calories">
-                                <span>Calories</span>
-                                <strong>@_editRecipe.Calories</strong>
-                            </div>
-                            @foreach (var row in NutritionFactRows)
-                            {
-                                <div class="facts-row">
-                                    <span>@row.Label</span>
-                                    <span>@row.Value</span>
-                                </div>
-                            }
-                        </div>
                     </div>
 
                     <div class="section" style="margin-top: 16px">
@@ -323,6 +313,35 @@
                             }
                         </div>
                     </div>
+
+                    <div class="section nutrition-analysis-section" style="margin-top: 16px">
+                        <div class="section-header">
+                            <div>
+                                <h3 style="margin-bottom: 6px">Full nutrient analysis</h3>
+                                <p class="muted" style="margin: 0">FDA-style label for @(_recipe.ServingSize ?? "1 serving"). Values reflect the stored Nutritionist Pro analysis.</p>
+                            </div>
+                            @if (IsAdmin)
+                            {
+                                <a class="quiet-action" href="@($"/downloads/recipes/{RecipeId}/exports/nutrition")">Export to Excel</a>
+                            }
+                        </div>
+                        <div class="nutrition-facts-label fda-label">
+                            <div class="facts-title">Nutrition Facts</div>
+                            <div class="facts-serving">@_recipe.YieldServings servings per recipe</div>
+                            <div class="facts-serving"><strong>Serving size</strong><strong>@(_recipe.ServingSize ?? "1 serving")</strong></div>
+                            <div class="facts-calories-label">Amount per serving</div>
+                            <div class="facts-calories"><span>Calories</span><strong>@_editRecipe.Calories</strong></div>
+                            <div class="facts-daily-value">% Daily Value*</div>
+                            @foreach (var row in NutritionFactRows)
+                            {
+                                <div class="facts-row @(row.Indent ? "facts-indent" : "")">
+                                    <span>@row.Label</span>
+                                    <span>@row.Value @if (!string.IsNullOrWhiteSpace(row.DailyValue)) { <strong>@row.DailyValue</strong> }</span>
+                                </div>
+                            }
+                            <div class="facts-footnote">* The % Daily Value tells you how much a nutrient in a serving contributes to a daily diet.</div>
+                        </div>
+                    </div>
                 </section>
             </div>
         }
@@ -330,9 +349,15 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private AppRole CurrentRole { get; set; } = AppRole.Admin;
+
+    private bool IsAdmin => CurrentRole == AppRole.Admin;
+
     [Parameter] public int RecipeId { get; set; }
 
     private bool IsEditRoute => Navigation.Uri.EndsWith("/edit", StringComparison.OrdinalIgnoreCase);
+    private bool IsEditing => IsAdmin && IsEditRoute;
     private bool _loading = true;
     private RecipeDto? _recipe;
     private RecipeDto _editRecipe = new();
@@ -344,27 +369,29 @@
     private string? _actionMessage;
     private List<string> _scaledIngredients = [];
 
-    private string CategoryBreadcrumb =>
-        $"> Cuisines > Dietary Restrictions > Meal Components > Critical Nutrients";
-
     private static string ApprovalLabel(RecipeDto recipe) => recipe.IsApproved ? "Approved" : "Pending review";
 
-    private IReadOnlyList<(string Label, string Value)> NutritionFactRows =>
+    private IReadOnlyList<(string Label, string Value, bool Indent, string DailyValue)> NutritionFactRows =>
     [
-        ("Total Fat", $"{_editRecipe.FatG} g"),
-        ("Saturated Fat", $"{Math.Round(_editRecipe.FatG * 0.35m, 1)} g"),
-        ("Trans Fat", "0 g"),
-        ("Cholesterol", "0 mg"),
-        ("Sodium", $"{_editRecipe.SodiumMg} mg"),
-        ("Total Carbohydrate", $"{Math.Round((_editRecipe.Calories / 4m) * 0.45m, 0)} g"),
-        ("Dietary Fiber", $"{_editRecipe.FiberG} g"),
-        ("Total Sugars", "0 g"),
-        ("Protein", $"{_editRecipe.ProteinG} g"),
-        ("Vitamin C", $"{_editRecipe.VitaminCMg} mg"),
-        ("Calcium", $"{_editRecipe.CalciumMg} mg"),
-        ("Iron", $"{Math.Round(_editRecipe.ProteinG * 0.3m, 1)} mg"),
-        ("Potassium", $"{Math.Round(_editRecipe.Calories * 0.7m, 0)} mg")
+        ("Total Fat", $"{_editRecipe.FatG:0.##} g", false, DailyValue(_editRecipe.FatG, 78)),
+        ("Saturated Fat", $"{_editRecipe.SaturatedFatG:0.##} g", true, DailyValue(_editRecipe.SaturatedFatG, 20)),
+        ("Trans Fat", $"{_editRecipe.TransFatG:0.##} g", true, string.Empty),
+        ("Cholesterol", $"{_editRecipe.CholesterolMg:0.##} mg", false, DailyValue(_editRecipe.CholesterolMg, 300)),
+        ("Sodium", $"{_editRecipe.SodiumMg:0.##} mg", false, DailyValue(_editRecipe.SodiumMg, 2300)),
+        ("Total Carbohydrate", $"{_editRecipe.CarbohydratesG:0.##} g", false, DailyValue(_editRecipe.CarbohydratesG, 275)),
+        ("Dietary Fiber", $"{_editRecipe.FiberG:0.##} g", true, DailyValue(_editRecipe.FiberG, 28)),
+        ("Total Sugars", $"{_editRecipe.TotalSugarsG:0.##} g", true, string.Empty),
+        ("Includes Added Sugars", $"{_editRecipe.AddedSugarsG:0.##} g", true, DailyValue(_editRecipe.AddedSugarsG, 50)),
+        ("Protein", $"{_editRecipe.ProteinG:0.##} g", false, string.Empty),
+        ("Vitamin D", $"{_editRecipe.VitaminDMcg:0.##} mcg", false, DailyValue(_editRecipe.VitaminDMcg, 20)),
+        ("Calcium", $"{_editRecipe.CalciumMg:0.##} mg", false, DailyValue(_editRecipe.CalciumMg, 1300)),
+        ("Iron", $"{_editRecipe.IronMg:0.##} mg", false, DailyValue(_editRecipe.IronMg, 18)),
+        ("Potassium", $"{_editRecipe.PotassiumMg:0.##} mg", false, DailyValue(_editRecipe.PotassiumMg, 4700)),
+        ("Vitamin C", $"{_editRecipe.VitaminCMg:0.##} mg", false, DailyValue(_editRecipe.VitaminCMg, 90))
     ];
+
+    private static string DailyValue(decimal amount, decimal dailyValue) =>
+        $"{Math.Round(amount / dailyValue * 100, MidpointRounding.AwayFromZero):0}%";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -383,7 +410,7 @@
 
     private async Task SaveRecipe()
     {
-        if (_recipe is null)
+        if (!IsAdmin || _recipe is null)
         {
             return;
         }
@@ -414,10 +441,16 @@
         }
 
         var factor = _recipe.YieldServings == 0 ? 1 : (decimal)_scaleServings / _recipe.YieldServings;
-        _scaleMessage = $"Scaled from {_recipe.YieldServings} to {_scaleServings} servings.";
-        _scaledIngredients = _recipe.Ingredients
-            .Select(ingredient => $"{factor:0.##}x {ingredient}")
-            .ToList();
+        var scaledCount = 0;
+        _scaledIngredients = _recipe.Ingredients.Select(ingredient =>
+        {
+            var scaled = ScaleIngredient(ingredient, factor, out var quantityScaled);
+            if (quantityScaled) scaledCount++;
+            return scaled;
+        }).ToList();
+        _scaleMessage = scaledCount == 0
+            ? $"Batch set to {_scaleServings} servings. The stored ingredient lines do not include numeric quantities, so no amounts were changed."
+            : $"Scaled {scaledCount} ingredient amount{(scaledCount == 1 ? "" : "s")} from {_recipe.YieldServings} to {_scaleServings} servings.";
     }
 
     private async Task ToggleFavorite()
@@ -433,14 +466,63 @@
         _actionMessage = _editRecipe.IsFavorite ? "Recipe added to my favorite." : "Recipe removed from my favorite.";
     }
 
-    private void PrintRecipe()
+    private async Task PrintRecipe()
     {
-        _actionMessage = "Print Recipe would open the printable recipe view in the production system.";
+        await Js.InvokeVoidAsync("window.print");
     }
 
-    private void DeleteRecipe()
+    private void AddRecipeToPrintQueue()
     {
-        _actionMessage = "Delete selected. Recipe deletion requires the permissioned recipe maintenance flow before changes are saved.";
+        if (_recipe is null)
+        {
+            return;
+        }
+
+        var added = PrintQueue.Add("Recipe", _recipe.RecipeName, $"/recipes/{_recipe.RecipeId}", $"{_recipe.MealType} · {_recipe.Category}");
+        _actionMessage = added ? "Recipe added to the print queue." : "Recipe is already in the print queue.";
+    }
+
+    private async Task ArchiveRecipe()
+    {
+        if (!IsAdmin)
+        {
+            return;
+        }
+
+        _editRecipe.IsDead = true;
+        _recipe = await Api.UpdateRecipeAsync(RecipeId, _editRecipe);
+        _actionMessage = "Recipe archived. It is hidden from the active catalog but remains in the record history.";
+    }
+
+    private static string ScaleIngredient(string ingredient, decimal factor, out bool quantityScaled)
+    {
+        quantityScaled = false;
+        var match = System.Text.RegularExpressions.Regex.Match(ingredient, @"^\s*(\d+\s+\d+\/\d+|\d+(?:\.\d+)?|\d+\/\d+)\s+(.*)$");
+        if (!match.Success)
+        {
+            return ingredient;
+        }
+
+        var quantityText = match.Groups[1].Value;
+        decimal quantity = 0;
+        if (quantityText.Contains(' ') && quantityText.Contains('/'))
+        {
+            var mixed = quantityText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var parts = mixed[1].Split('/');
+            quantity = decimal.Parse(mixed[0]) + decimal.Parse(parts[0]) / decimal.Parse(parts[1]);
+        }
+        else if (quantityText.Contains('/'))
+        {
+            var parts = quantityText.Split('/');
+            quantity = decimal.Parse(parts[0]) / decimal.Parse(parts[1]);
+        }
+        else if (!decimal.TryParse(quantityText, out quantity))
+        {
+            return ingredient;
+        }
+
+        quantityScaled = true;
+        return $"{quantity * factor:0.##} {match.Groups[2].Value}";
     }
 
     private static RecipeDto CloneRecipe(RecipeDto recipe) =>
@@ -469,6 +551,15 @@
             IsDead = recipe.IsDead,
             NutrientClaims = [.. recipe.NutrientClaims],
             VitaminCMg = recipe.VitaminCMg,
-            CalciumMg = recipe.CalciumMg
+            CalciumMg = recipe.CalciumMg,
+            SaturatedFatG = recipe.SaturatedFatG,
+            TransFatG = recipe.TransFatG,
+            CholesterolMg = recipe.CholesterolMg,
+            CarbohydratesG = recipe.CarbohydratesG,
+            TotalSugarsG = recipe.TotalSugarsG,
+            AddedSugarsG = recipe.AddedSugarsG,
+            VitaminDMcg = recipe.VitaminDMcg,
+            IronMg = recipe.IronMg,
+            PotassiumMg = recipe.PotassiumMg
         };
 }
