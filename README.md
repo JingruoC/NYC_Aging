@@ -87,6 +87,10 @@ Docker Compose runs the current Blazor UI, not the archived Next.js prototype.
 
 The simplest hosted prototype path is Render Blueprint deployment using `render.yaml`.
 
+- Source repository: <https://github.com/JingruoC/NYC_Aging>
+- Interactive prototype: <https://simple-servings-prototype.onrender.com>
+- Deployment health check: <https://simple-servings-prototype.onrender.com/health>
+
 This runs a single Docker web service:
 
 - Blazor Server is the public app.
@@ -100,6 +104,8 @@ Steps:
 3. Connect the GitHub repository.
 4. Render will detect `render.yaml` and create `simple-servings-prototype`.
 5. Open the generated `onrender.com` URL.
+
+Render is connected to the repository's `main` branch and starts a new deployment after each successful push. A failed deployment does not replace the last healthy version, so the public URL can remain available while GitHub displays a red deployment status for the newer commit. Use the health-check URL above to confirm that the running service is reachable, then inspect or retry the latest deploy in Render.
 
 Prototype hosting limitation:
 
