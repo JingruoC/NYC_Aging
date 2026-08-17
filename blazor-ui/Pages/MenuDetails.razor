@@ -1243,7 +1243,7 @@
         var normalizedType = string.IsNullOrWhiteSpace(targetType) ? "menu" : targetType.Trim().ToLowerInvariant();
         if (normalizedType == "recipe" && recipeId is not null)
         {
-            return $"recipe:{recipeId}";
+            return $"recipe:{recipeId}:{dayIndex?.ToString() ?? "any"}:{NormalizeToken(mealSlot)}:{NormalizeCommentComponentKey(componentKey ?? string.Empty)}";
         }
 
         if (normalizedType == "nutrition")
@@ -1758,6 +1758,8 @@
     protected override async Task OnParametersSetAsync()
     {
         _accessDenied = false;
+        SelectedCommentTarget = GeneralMenuTarget;
+        ReviewMealScope = AllMealsScope;
         Menu = await Api.GetMenuAsync(MenuId);
         if (Menu is not null && IsProvider && !AppMode.CanProviderSeeMenu(Menu.Menu))
         {

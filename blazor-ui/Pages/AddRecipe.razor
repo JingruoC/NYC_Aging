@@ -5,6 +5,21 @@
 
 @if (IsAdmin)
 {
+    <section class="section admin-entry-mode-switch">
+        <div>
+            <div class="eyebrow">Add recipe</div>
+            <strong>Choose entry workflow</strong>
+            <p class="muted small">Use catalog entry for direct staff maintenance, or submission form for the three conditional form paths.</p>
+        </div>
+        <div class="segmented-control admin-entry-mode-options" aria-label="Recipe entry workflow">
+            <button type="button" class="@(_adminEntryMode == AdminCatalogMode ? "active" : "")" @onclick="() => SetAdminEntryMode(AdminCatalogMode)">Catalog entry</button>
+            <button type="button" class="@(_adminEntryMode == SubmissionFormMode ? "active" : "")" @onclick="() => SetAdminEntryMode(SubmissionFormMode)">Submission form</button>
+        </div>
+    </section>
+}
+
+@if (IsAdmin && _adminEntryMode == AdminCatalogMode)
+{
     <AdminRecipeEntry />
 }
 else
@@ -500,6 +515,10 @@ else
 
     private bool IsAdmin => CurrentRole == AppRole.Admin;
 
+    private const string AdminCatalogMode = "catalog";
+    private const string SubmissionFormMode = "submission";
+    private string _adminEntryMode = AdminCatalogMode;
+
     private const string FullRecipeType = "full-recipe";
     private const string NutritionAnalysisType = "nutrition-analysis";
     private const string ProductLabelType = "product-label";
@@ -578,6 +597,13 @@ else
     };
 
     private bool IsSubmissionType(string type) => _form.SubmissionType.Equals(type, StringComparison.OrdinalIgnoreCase);
+
+    private void SetAdminEntryMode(string mode)
+    {
+        _adminEntryMode = mode;
+        _message = null;
+        _errors.Clear();
+    }
 
     private void SetSubmissionType(string type)
     {
