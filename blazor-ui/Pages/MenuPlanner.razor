@@ -465,111 +465,113 @@
                     </div>
                     <input class="input compact-input" @bind="SearchText" @bind:event="oninput" placeholder="Search recipes" />
                 </div>
-                <div class="gallery-filter-grid">
-                    <label>
-                        <div class="small muted">Recipe View</div>
-                        <InputSelect class="input compact-input" @bind-Value="RecipeViewMode">
-                            @foreach (var option in RecipeViewOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </InputSelect>
-                    </label>
-                    <label>
-                        <div class="small muted">Filter By</div>
-                        <InputSelect class="input compact-input" @bind-Value="RecipeFilterGroup" @bind-Value:after="OnRecipeFilterGroupChanged">
-                            @foreach (var option in RecipeFilterGroupOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </InputSelect>
-                    </label>
-                    <label>
-                        <div class="small muted">Filter value</div>
-                        <InputSelect class="input compact-input" @bind-Value="RecipeFilterValue">
-                            @foreach (var option in RecipeFilterValueOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </InputSelect>
-                    </label>
-                    <button type="button" class="secondary-button gallery-add-filter" @onclick="AddGalleryFilter" disabled="@(!CanAddGalleryFilter)">Add filter</button>
-                    <label class="checkbox-chip gallery-favorite-filter">
-                        <input type="checkbox" @bind="FavoritesOnly" />
-                        <span>My Favorites</span>
-                    </label>
-                </div>
-                @if (SelectedGalleryFilters.Any())
-                {
-                    <div class="selected-filter-row" aria-label="Selected recipe filters">
-                        <span class="small muted">Matching all:</span>
-                        @foreach (var filter in SelectedGalleryFilters)
-                        {
-                            var selectedFilter = filter;
-                            <button type="button" class="filter-chip" title="Remove filter" @onclick="() => RemoveGalleryFilter(selectedFilter)">@filter.Group: @filter.Value <span aria-hidden="true">×</span></button>
-                        }
-                        <button type="button" class="text-button small" @onclick="ClearGalleryFilters">Clear filters</button>
+                <div class="planner-gallery-scroll" data-testid="recipe-gallery-scroll">
+                    <div class="gallery-filter-grid">
+                        <label>
+                            <div class="small muted">Recipe View</div>
+                            <InputSelect class="input compact-input" @bind-Value="RecipeViewMode">
+                                @foreach (var option in RecipeViewOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label>
+                            <div class="small muted">Filter By</div>
+                            <InputSelect class="input compact-input" @bind-Value="RecipeFilterGroup" @bind-Value:after="OnRecipeFilterGroupChanged">
+                                @foreach (var option in RecipeFilterGroupOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label>
+                            <div class="small muted">Filter value</div>
+                            <InputSelect class="input compact-input" @bind-Value="RecipeFilterValue">
+                                @foreach (var option in RecipeFilterValueOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <button type="button" class="secondary-button gallery-add-filter" @onclick="AddGalleryFilter" disabled="@(!CanAddGalleryFilter)">Add filter</button>
+                        <label class="checkbox-chip gallery-favorite-filter">
+                            <input type="checkbox" @bind="FavoritesOnly" />
+                            <span>My Favorites</span>
+                        </label>
                     </div>
-                }
-
-                <div class="section-inner">
-                    <div class="section-header">
-                        <h4>@GallerySectionTitle</h4>
-                        <div class="hero-actions">
-                            @if (!string.IsNullOrWhiteSpace(CurrentGalleryContext))
+                    @if (SelectedGalleryFilters.Any())
+                    {
+                        <div class="selected-filter-row" aria-label="Selected recipe filters">
+                            <span class="small muted">Matching all:</span>
+                            @foreach (var filter in SelectedGalleryFilters)
                             {
-                                <span class="status-badge brand">@CurrentGalleryContext</span>
+                                var selectedFilter = filter;
+                                <button type="button" class="filter-chip" title="Remove filter" @onclick="() => RemoveGalleryFilter(selectedFilter)">@filter.Group: @filter.Value <span aria-hidden="true">×</span></button>
                             }
-                            <span class="status-badge brand">@GalleryRecipes.Count() recipes</span>
+                            <button type="button" class="text-button small" @onclick="ClearGalleryFilters">Clear filters</button>
                         </div>
-                    </div>
-                    <div class="toggle-row">
-                        <button type="button" class="@(RecipeGalleryMode == RecommendedGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(RecommendedGalleryMode)">Recommended</button>
-                        <button type="button" class="@(RecipeGalleryMode == BreakfastMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(BreakfastMeal)">Breakfast</button>
-                        <button type="button" class="@(RecipeGalleryMode == LunchMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(LunchMeal)">Lunch</button>
-                        <button type="button" class="@(RecipeGalleryMode == DinnerMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(DinnerMeal)">Dinner</button>
-                        <button type="button" class="@(RecipeGalleryMode == AllGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(AllGalleryMode)">All</button>
-                    </div>
-                    <div class="table-list planner-recipe-list compact-recipe-picker">
-                        @foreach (var recipe in VisibleGalleryRecipes)
+                    }
+
+                    <div class="section-inner">
+                        <div class="section-header">
+                            <h4>@GallerySectionTitle</h4>
+                            <div class="hero-actions">
+                                @if (!string.IsNullOrWhiteSpace(CurrentGalleryContext))
+                                {
+                                    <span class="status-badge brand">@CurrentGalleryContext</span>
+                                }
+                                <span class="status-badge brand">@GalleryRecipes.Count() recipes</span>
+                            </div>
+                        </div>
+                        <div class="toggle-row">
+                            <button type="button" class="@(RecipeGalleryMode == RecommendedGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(RecommendedGalleryMode)">Recommended</button>
+                            <button type="button" class="@(RecipeGalleryMode == BreakfastMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(BreakfastMeal)">Breakfast</button>
+                            <button type="button" class="@(RecipeGalleryMode == LunchMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(LunchMeal)">Lunch</button>
+                            <button type="button" class="@(RecipeGalleryMode == DinnerMeal ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(DinnerMeal)">Dinner</button>
+                            <button type="button" class="@(RecipeGalleryMode == AllGalleryMode ? "button" : "ghost-button")" @onclick:stopPropagation="true" @onclick="() => SetRecipeGalleryMode(AllGalleryMode)">All</button>
+                        </div>
+                        <div class="table-list planner-recipe-list compact-recipe-picker">
+                            @foreach (var recipe in VisibleGalleryRecipes)
+                            {
+                                <div class="recipe-picker-row" role="button" tabindex="0" @onclick="() => ShowRecipePreview(recipe)" data-dnd-select-recipe="true" data-dnd-payload="@($"recipe:{recipe.RecipeId}")" data-testid="@($"gallery-recipe-{recipe.RecipeId}")" draggable="true">
+                                    <div class="recipe-picker-main">
+                                        <div class="table-title-row">
+                                            <strong>@recipe.RecipeName</strong>
+                                            @if (recipe.IsFavorite)
+                                            {
+                                                <span class="recipe-favorite-badge">Favorite</span>
+                                            }
+                                        </div>
+                                        <div class="recipe-picker-meta">@recipe.MealType · @recipe.Category · @(recipe.ServingSize ?? "1 serving")</div>
+                                        <div class="recipe-picker-tags">
+                                            @foreach (var tag in GalleryTags(recipe))
+                                            {
+                                                <span class="tag-chip">@tag</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="recipe-picker-nutrition" aria-label="Recipe nutrition">
+                                        <span><strong>@recipe.Calories</strong> kcal</span>
+                                        <span><strong>@recipe.SodiumMg</strong> mg sodium</span>
+                                        <span><strong>@recipe.ProteinG</strong> g protein</span>
+                                        <span><strong>@recipe.FiberG</strong> g fiber</span>
+                                    </div>
+                                    <div class="recipe-picker-actions">
+                                        <span class="drag-handle card-drag-handle" aria-hidden="true">Drag</span>
+                                        <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => ShowRecipePreview(recipe)">View</button>
+                                        <button type="button" class="button tiny-button" data-testid="@($"gallery-add-{recipe.RecipeId}")" disabled="@(FindPlacementTarget(recipe) is null)" @onclick:stopPropagation="true" @onclick="() => AssignRecipe(recipe)">@AssignmentButtonLabel(recipe, shortLabel: true)</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        @if (HasMoreGalleryRecipes)
                         {
-                            <div class="recipe-picker-row" role="button" tabindex="0" @onclick="() => ShowRecipePreview(recipe)" data-dnd-select-recipe="true" data-dnd-payload="@($"recipe:{recipe.RecipeId}")" data-testid="@($"gallery-recipe-{recipe.RecipeId}")" draggable="true">
-                                <div class="recipe-picker-main">
-                                    <div class="table-title-row">
-                                        <strong>@recipe.RecipeName</strong>
-                                        @if (recipe.IsFavorite)
-                                        {
-                                            <span class="recipe-favorite-badge">Favorite</span>
-                                        }
-                                    </div>
-                                    <div class="recipe-picker-meta">@recipe.MealType · @recipe.Category · @(recipe.ServingSize ?? "1 serving")</div>
-                                    <div class="recipe-picker-tags">
-                                        @foreach (var tag in GalleryTags(recipe))
-                                        {
-                                            <span class="tag-chip">@tag</span>
-                                        }
-                                    </div>
-                                </div>
-                                <div class="recipe-picker-nutrition" aria-label="Recipe nutrition">
-                                    <span><strong>@recipe.Calories</strong> kcal</span>
-                                    <span><strong>@recipe.SodiumMg</strong> mg sodium</span>
-                                    <span><strong>@recipe.ProteinG</strong> g protein</span>
-                                    <span><strong>@recipe.FiberG</strong> g fiber</span>
-                                </div>
-                                <div class="recipe-picker-actions">
-                                    <span class="drag-handle card-drag-handle" aria-hidden="true">Drag</span>
-                                    <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => ShowRecipePreview(recipe)">View</button>
-                                    <button type="button" class="button tiny-button" data-testid="@($"gallery-add-{recipe.RecipeId}")" disabled="@(FindPlacementTarget(recipe) is null)" @onclick:stopPropagation="true" @onclick="() => AssignRecipe(recipe)">@AssignmentButtonLabel(recipe, shortLabel: true)</button>
-                                </div>
+                            <div class="hero-actions" style="justify-content: center">
+                                <button type="button" class="ghost-button" @onclick="ShowMoreGalleryRecipes">Show more recipes</button>
                             </div>
                         }
                     </div>
-                    @if (HasMoreGalleryRecipes)
-                    {
-                        <div class="hero-actions" style="justify-content: center">
-                            <button type="button" class="ghost-button" @onclick="ShowMoreGalleryRecipes">Show more recipes</button>
-                        </div>
-                    }
                 </div>
             </section>
 

@@ -380,12 +380,24 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
 }
 .planner-gallery-panel, .planner-details-panel { min-height: 0; overflow: hidden; }
-.planner-gallery-panel { padding: 14px; }
-.planner-gallery-panel { max-height: 50vh; }
+.planner-gallery-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 50vh;
+  max-height: 680px;
+  padding: 14px;
+}
 .section-header.planner-gallery-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
+}
+.planner-gallery-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
 }
 .planner-details-panel {
   display: grid;
@@ -395,9 +407,9 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
 }
 .planner-gallery-panel .section-inner {
-  max-height: calc(50vh - 178px);
-  overflow: auto;
-  padding-right: 4px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 .planner-empty-state { margin-top: 14px; padding: 16px; text-align: left; }
 .calendar-scroll {
