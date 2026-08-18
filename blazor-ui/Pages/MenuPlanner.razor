@@ -376,6 +376,7 @@
                             <div class="calendar-cell @MealSlotClass(selectedMealSlot) @(isActive ? "active" : "") @(HoveredCell?.DayIndex == currentDayIndex && HoveredCell?.MealSlot == selectedMealSlot && HoveredCell?.ComponentKey == currentComponent.Key ? "drop-target" : "") @(assigned is not null ? "filled" : "")"
                                  role="button"
                                  tabindex="0"
+                                 data-testid="@CellTestId(ActiveWeek, currentDayIndex, selectedMealSlot, currentComponent.Key)"
                                  @onclick="() => SelectCell(currentDayIndex, selectedMealSlot, currentComponent.Key)"
                                  data-dnd-select-cell="true"
                                  data-dnd-dropzone="true"
@@ -394,7 +395,10 @@
                                 }
                                 else
                                 {
-                                    <div class="scheduled-card" data-dnd-payload="@($"scheduled:{assigned.RecipeId}:{currentDayIndex}:{SelectedMealView.ToString().ToLowerInvariant()}:{currentComponent.Key}")" draggable="true">
+                                    <div class="scheduled-card"
+                                         data-testid="@ScheduledCardTestId(ActiveWeek, currentDayIndex, selectedMealSlot, currentComponent.Key)"
+                                         data-dnd-payload="@($"scheduled:{assigned.RecipeId}:{currentDayIndex}:{SelectedMealView.ToString().ToLowerInvariant()}:{currentComponent.Key}")"
+                                         draggable="true">
                                         <span class="meal-badge @MealSlotClass(selectedMealSlot)">@component.ShortLabel</span>
                                         <strong>@assigned.RecipeName</strong>
                                         <div class="muted small">@assigned.Category · @assigned.MealType</div>
@@ -407,19 +411,35 @@
                                             }
                                             <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => RemoveRecipe(currentDayIndex, selectedMealSlot, currentComponent.Key)">Remove</button>
                                         </div>
-                                        <details class="copy-item-details" @onclick:stopPropagation="true">
-                                            <summary>Copy to another week</summary>
-                                            <div class="copy-item-week-list">
+                                        <div class="copy-item-control" data-dnd-no-drag="true" @onclick:stopPropagation="true">
+                                            <button type="button"
+                                                    class="copy-item-toggle"
+                                                    data-testid="@CopyToggleTestId(currentDayIndex, selectedMealSlot, currentComponent.Key)"
+                                                    aria-expanded="@(IsCopyItemOpen(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned) ? "true" : "false")"
+                                                    title="Copy this recipe to the same day, meal, and component in another cycle week"
+                                                    @onclick="() => ToggleCopyItem(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned)">
+                                                Copy to week
+                                            </button>
+                                            @if (IsCopyItemOpen(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned))
+                                            {
+                                                <div class="copy-item-week-list" aria-label="Choose a target cycle week">
                                                 @for (var targetWeek = 1; targetWeek <= 6; targetWeek++)
                                                 {
                                                     var copyWeek = targetWeek;
                                                     if (copyWeek != ActiveWeek)
                                                     {
-                                                        <button type="button" aria-label="Copy @assigned.RecipeName to Week @copyWeek" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => CopyScheduledItemToWeek(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned, copyWeek)">Week @copyWeek</button>
+                                                        <button type="button"
+                                                                aria-label="Copy @assigned.RecipeName to Week @copyWeek"
+                                                                data-testid="@CopyWeekTestId(currentDayIndex, selectedMealSlot, currentComponent.Key, copyWeek)"
+                                                                class="secondary-button tiny-button"
+                                                                @onclick="() => CopyScheduledItemToWeek(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned, copyWeek)">
+                                                            Week @copyWeek
+                                                        </button>
                                                     }
                                                 }
-                                            </div>
-                                        </details>
+                                                </div>
+                                            }
+                                        </div>
                                         @if (LastCopyConfirmation is { } copyConfirmation
                                             && IsLastCopiedItem(currentDayIndex, selectedMealSlot, currentComponent.Key, assigned))
                                         {
@@ -513,7 +533,7 @@
                     <div class="table-list planner-recipe-list compact-recipe-picker">
                         @foreach (var recipe in VisibleGalleryRecipes)
                         {
-                            <div class="recipe-picker-row" role="button" tabindex="0" @onclick="() => ShowRecipePreview(recipe)" data-dnd-select-recipe="true" data-dnd-payload="@($"recipe:{recipe.RecipeId}")" draggable="true">
+                            <div class="recipe-picker-row" role="button" tabindex="0" @onclick="() => ShowRecipePreview(recipe)" data-dnd-select-recipe="true" data-dnd-payload="@($"recipe:{recipe.RecipeId}")" data-testid="@($"gallery-recipe-{recipe.RecipeId}")" draggable="true">
                                 <div class="recipe-picker-main">
                                     <div class="table-title-row">
                                         <strong>@recipe.RecipeName</strong>
@@ -539,7 +559,7 @@
                                 <div class="recipe-picker-actions">
                                     <span class="drag-handle card-drag-handle" aria-hidden="true">Drag</span>
                                     <button type="button" class="secondary-button tiny-button" @onclick:stopPropagation="true" @onclick="() => ShowRecipePreview(recipe)">View</button>
-                                    <button type="button" class="button tiny-button" @onclick:stopPropagation="true" @onclick="() => AssignRecipe(recipe)">Add</button>
+                                    <button type="button" class="button tiny-button" data-testid="@($"gallery-add-{recipe.RecipeId}")" disabled="@(FindPlacementTarget(recipe) is null)" @onclick:stopPropagation="true" @onclick="() => AssignRecipe(recipe)">@AssignmentButtonLabel(recipe, shortLabel: true)</button>
                                 </div>
                             </div>
                         }
@@ -553,21 +573,25 @@
                 </div>
             </section>
 
-            <section class="section planner-details-panel">
-            <div class="section-header">
-                        <div>
-                            <h3 style="margin-bottom: 6px">Planner details</h3>
+            <section class="section planner-details-panel" data-testid="planner-details">
+                <div class="planner-details-header">
+                    <div>
+                        <h3>Planner details</h3>
+                        <div class="planner-target-line @(SelectedCell is null ? "muted" : "")" data-testid="selected-target">
+                            @(SelectedCell is null ? "No slot selected. Suggestions will use the next compatible open slot." : $"Selected: {SelectedCellLabel}")
                         </div>
-                <div class="toggle-row">
-                    <button type="button" class="@(PlannerSidebarTab == PlannerInsightsTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerInsightsTab)">Insights</button>
-                    <button type="button" class="@(PlannerSidebarTab == PlannerTrayTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerTrayTab)">Placed recipes</button>
-                    <button type="button" class="@(PlannerSidebarTab == PlannerSummaryTab ? "button" : "ghost-button")" @onclick="() => SetPlannerSidebarTab(PlannerSummaryTab)">Summary</button>
+                    </div>
+                    <div class="planner-details-tabs" role="tablist" aria-label="Planner details views">
+                        <button type="button" role="tab" aria-selected="@(PlannerSidebarTab == PlannerInsightsTab)" class="@(PlannerSidebarTab == PlannerInsightsTab ? "active" : "")" @onclick="() => SetPlannerSidebarTab(PlannerInsightsTab)">Insights</button>
+                        <button type="button" role="tab" aria-selected="@(PlannerSidebarTab == PlannerTrayTab)" class="@(PlannerSidebarTab == PlannerTrayTab ? "active" : "")" @onclick="() => SetPlannerSidebarTab(PlannerTrayTab)">Placed recipes</button>
+                        <button type="button" role="tab" aria-selected="@(PlannerSidebarTab == PlannerSummaryTab)" class="@(PlannerSidebarTab == PlannerSummaryTab ? "active" : "")" @onclick="() => SetPlannerSidebarTab(PlannerSummaryTab)">Summary</button>
+                    </div>
                 </div>
-            </div>
 
-            @if (PlannerSidebarTab == PlannerInsightsTab && Analysis is not null)
-            {
-                <section class="section">
+                <div class="planner-detail-content">
+                @if (PlannerSidebarTab == PlannerInsightsTab && Analysis is not null)
+                {
+                    <section class="planner-detail-section">
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">Suggested next</h3>
@@ -581,27 +605,27 @@
                     <div class="status-stack">
                         @foreach (var item in RecommendedItems.Take(4))
                         {
-                            <div class="status-row">
+                            <div class="status-row planner-suggestion-row">
                                 <div>
                                     <strong>@item.Recipe.RecipeName</strong>
                                     <div class="muted small">@item.Recipe.MealType · @item.Recipe.Category</div>
                                     <div class="muted small">@string.Join(" · ", item.Reasons)</div>
                                 </div>
-                                <div class="hero-actions">
-                                    <span class="status-badge brand">@item.Score.ToString("0.0")</span>
-                        <button type="button" class="button small-button" @onclick="() => SelectRecipeFromGallery(item.Recipe)">Add to selected slot</button>
+                                <div class="planner-suggestion-actions">
+                                    <span class="status-badge brand">Match @item.Score.ToString("0.0")</span>
+                                    <button type="button" class="button small-button" data-testid="@($"suggested-add-{item.Recipe.RecipeId}")" disabled="@(FindPlacementTarget(item.Recipe) is null)" @onclick="() => SelectRecipeFromGallery(item.Recipe)">@AssignmentButtonLabel(item.Recipe)</button>
                                 </div>
                             </div>
                         }
                     </div>
-                </section>
+                    </section>
 
                 <div class="section-header nutrition-compact-heading">
                     <strong>Nutrition analysis</strong>
                     <button type="button" class="secondary-button small-button" @onclick="OpenNutritionReview">Open full view</button>
                 </div>
                 <NutritionPanel Totals="@Analysis.Totals" Statuses="@Analysis.Statuses" MealRequirements="@Analysis.MealRequirements" OverallStatus="@Analysis.OverallStatus" OnRecipeSelected="SelectRecipeFromGallery" />
-                <section class="section">
+                    <section class="planner-detail-section">
                     <h3>Rule-based revisions</h3>
                     <div class="section-inner">
                         @foreach (var group in RevisionSuggestions)
@@ -611,21 +635,21 @@
                                 <div class="status-stack">
                                     @foreach (var item in group.Value)
                                     {
-                                        <div class="status-row">
+                                        <div class="status-row planner-suggestion-row">
                                             <div>
                                                 <strong>@item.Recipe.RecipeName</strong>
                                                 <div class="muted small">@string.Join(" · ", item.Reasons)</div>
                                             </div>
-                                            <button type="button" class="ghost-button tiny-button" @onclick="() => SelectRecipeFromGallery(item.Recipe)">Add to selected slot</button>
+                                            <button type="button" class="secondary-button tiny-button" disabled="@(FindPlacementTarget(item.Recipe) is null)" @onclick="() => SelectRecipeFromGallery(item.Recipe)">@AssignmentButtonLabel(item.Recipe)</button>
                                         </div>
                                     }
                                 </div>
                             </div>
                         }
                     </div>
-                </section>
+                    </section>
 
-                <section class="section">
+                    <section class="planner-detail-section">
                     <h3>Similar historical menus</h3>
                     <div class="status-stack">
                         @foreach (var menu in SimilarMenus)
@@ -639,18 +663,18 @@
                             </div>
                         }
                     </div>
-                </section>
-            }
-            else if (PlannerSidebarTab == PlannerInsightsTab)
-            {
-                <div class="empty-state planner-empty-state">
-                    Select a component cell, then add a recipe from the gallery. Nutrition checks, suggestions, and similar menus will appear here after the first recipe is placed.
-                </div>
-            }
+                    </section>
+                }
+                else if (PlannerSidebarTab == PlannerInsightsTab)
+                {
+                    <div class="empty-state planner-empty-state">
+                        Select a component cell, then add a recipe from the gallery. Nutrition checks, suggestions, and similar menus will appear here after the first recipe is placed.
+                    </div>
+                }
 
-            @if (PlannerSidebarTab == PlannerTrayTab)
-            {
-                <section class="section">
+                @if (PlannerSidebarTab == PlannerTrayTab)
+                {
+                    <section class="planner-detail-section">
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">Recipes placed in Week @ActiveWeek</h3>
@@ -692,12 +716,12 @@
                             <div class="empty-state">No recipes placed in this week yet.</div>
                         }
                     </div>
-                </section>
-            }
+                    </section>
+                }
 
-            @if (PlannerSidebarTab == PlannerSummaryTab)
-            {
-                <section class="section">
+                @if (PlannerSidebarTab == PlannerSummaryTab)
+                {
+                    <section class="planner-detail-section">
                     <div class="section-header">
                         <div>
                             <h3 style="margin-bottom: 6px">Week summary</h3>
@@ -713,8 +737,9 @@
                             </div>
                         }
                     </div>
-                </section>
-            }
+                    </section>
+                }
+                </div>
             </section>
         </div>
     </div>
@@ -884,6 +909,7 @@
     private int SwapDayTo { get; set; } = 1;
     private int CycleActionTargetWeek { get; set; } = 2;
     private int ClearDayIndex { get; set; }
+    private CopyItemSelection? OpenCopyItem { get; set; }
     private CopyConfirmation? LastCopyConfirmation { get; set; }
     private RecipeDto? PreviewRecipe { get; set; }
     private bool ShowNutritionReview { get; set; }
@@ -965,6 +991,10 @@
     private string? CurrentGalleryContext => SelectedCell is null
         ? null
         : $"{MealLabel(SelectedCell.Value.MealSlot)} · {SelectedCell.Value.ComponentKey} focus";
+
+    private string SelectedCellLabel => SelectedCell is not { } selected
+        ? string.Empty
+        : $"{DateForDayIndex(selected.DayIndex):ddd, MMM d} · {MealLabel(selected.MealSlot)} · {ComponentLabel(selected.ComponentKey)}";
 
     private static IEnumerable<string> GalleryTags(RecipeDto recipe) =>
         recipe.Tags
@@ -1064,7 +1094,7 @@
         try
         {
             _dotNetRef = DotNetObjectReference.Create(this);
-            _dragDropModule = await Js.InvokeAsync<IJSObjectReference>("import", "./js/dragDropBridge.js");
+            _dragDropModule = await Js.InvokeAsync<IJSObjectReference>("import", "./js/dragDropBridge.js?v=20260818-2");
             await _dragDropModule.InvokeVoidAsync("attachDragPayloads", _plannerRoot, _dotNetRef);
         }
         catch
@@ -1179,6 +1209,10 @@
     private void SetActiveWeek(int week)
     {
         ActiveWeek = week;
+        SelectedCell = null;
+        HoveredCell = null;
+        OpenCopyItem = null;
+        LastCopyConfirmation = null;
         if (CycleActionTargetWeek == week || CycleActionTargetWeek is < 1 or > 6)
         {
             CycleActionTargetWeek = Enumerable.Range(1, 6).First(candidate => candidate != week);
@@ -1190,8 +1224,36 @@
     private void SelectCell(int dayIndex, MealSlot mealSlot, string componentKey)
     {
         SelectedCell = new CellSelection(dayIndex, mealSlot, componentKey);
+        PlannerMessage = null;
         SelectedMealView = MealSlotToGalleryMode(mealSlot);
         SetRecipeGalleryMode(MealSlotToGalleryMode(mealSlot));
+    }
+
+    private static string CellTestId(int week, int dayIndex, MealSlot mealSlot, string componentKey) =>
+        $"cell-w{week}-d{dayIndex}-{mealSlot.ToString().ToLowerInvariant()}-{NormalizeComponentKey(componentKey)}";
+
+    private static string ScheduledCardTestId(int week, int dayIndex, MealSlot mealSlot, string componentKey) =>
+        $"scheduled-w{week}-d{dayIndex}-{mealSlot.ToString().ToLowerInvariant()}-{NormalizeComponentKey(componentKey)}";
+
+    private static string CopyToggleTestId(int dayIndex, MealSlot mealSlot, string componentKey) =>
+        $"copy-toggle-d{dayIndex}-{mealSlot.ToString().ToLowerInvariant()}-{NormalizeComponentKey(componentKey)}";
+
+    private static string CopyWeekTestId(int dayIndex, MealSlot mealSlot, string componentKey, int targetWeek) =>
+        $"copy-d{dayIndex}-{mealSlot.ToString().ToLowerInvariant()}-{NormalizeComponentKey(componentKey)}-w{targetWeek}";
+
+    private bool IsCopyItemOpen(int dayIndex, MealSlot mealSlot, string componentKey, RecipeDto recipe) =>
+        OpenCopyItem is { } selection
+        && selection.DayIndex == dayIndex
+        && selection.MealSlot == mealSlot
+        && selection.ComponentKey.Equals(componentKey, StringComparison.OrdinalIgnoreCase)
+        && selection.RecipeId == recipe.RecipeId;
+
+    private void ToggleCopyItem(int dayIndex, MealSlot mealSlot, string componentKey, RecipeDto recipe)
+    {
+        OpenCopyItem = IsCopyItemOpen(dayIndex, mealSlot, componentKey, recipe)
+            ? null
+            : new CopyItemSelection(dayIndex, mealSlot, componentKey, recipe.RecipeId);
+        LastCopyConfirmation = null;
     }
 
     private Task SelectRecipeFromGallery(RecipeDto recipe) => AssignRecipe(recipe);
@@ -1528,6 +1590,7 @@
         CompletedWeeks.Remove(targetWeek);
         UpdateMenuStatusFromCompletedWeeks();
         LastCopyConfirmation = new CopyConfirmation(dayIndex, mealSlot, componentKey, recipe.RecipeId, targetWeek);
+        OpenCopyItem = null;
         PlannerMessage = $"Copied {recipe.RecipeName} to Week {targetWeek}, {ServiceDayLabels[dayIndex]} {MealLabel(mealSlot).ToLowerInvariant()}.";
     }
 
@@ -1572,64 +1635,99 @@
 
     private async Task AssignRecipe(RecipeDto recipe)
     {
-        if (SelectedCell is not null)
+        var target = FindPlacementTarget(recipe);
+        if (target is null)
         {
-            if (!recipe.IsSuitableForMealSlot(SelectedCell.Value.MealSlot))
-            {
-                PlannerMessage = $"{recipe.RecipeName} cannot be placed in {MealLabel(SelectedCell.Value.MealSlot).ToLowerInvariant()}.";
-                return;
-            }
-
-            var componentKey = NormalizeComponentKey(SelectedCell.Value.ComponentKey);
-            if (!CanPlaceRecipeInComponent(recipe, componentKey))
-            {
-                PlannerMessage = $"{recipe.RecipeName} does not match the selected {ComponentLabel(componentKey).ToLowerInvariant()} component.";
-                return;
-            }
-
-            if (GetCellRecipe(SelectedCell.Value.DayIndex, SelectedCell.Value.MealSlot, componentKey) is { } existing)
-            {
-                PlannerMessage = $"{ComponentLabel(componentKey)} already contains {existing.RecipeName}. Move or remove that recipe before adding another.";
-                return;
-            }
-
-            CurrentSchedule[SelectedCell.Value.DayIndex][SelectedCell.Value.MealSlot][componentKey] = recipe;
-            ReopenActiveWeekAfterChange();
-            SelectedCell = null;
-            LastPlacedRecipe = recipe;
-            PlannerSidebarTab = PlannerInsightsTab;
-            PlannerMessage = null;
-            await RefreshInsightsAsync();
+            PlannerMessage = $"No compatible open slot was found for {recipe.RecipeName}.";
             return;
+        }
+
+        CurrentSchedule[target.Value.DayIndex][target.Value.MealSlot][target.Value.ComponentKey] = recipe;
+        ReopenActiveWeekAfterChange();
+        SelectedCell = null;
+        LastPlacedRecipe = recipe;
+        PlannerSidebarTab = PlannerInsightsTab;
+        PlannerMessage = $"Added {recipe.RecipeName} to {DateForDayIndex(target.Value.DayIndex):ddd, MMM d} · {MealLabel(target.Value.MealSlot)} · {ComponentLabel(target.Value.ComponentKey)}.";
+        await RefreshInsightsAsync();
+    }
+
+    private CellSelection? FindPlacementTarget(RecipeDto recipe)
+    {
+        if (SelectedCell is { } selected)
+        {
+            var selectedComponent = NormalizeComponentKey(selected.ComponentKey);
+            if (VisibleDayIndices.Contains(selected.DayIndex)
+                && recipe.IsSuitableForMealSlot(selected.MealSlot)
+                && CanPlaceRecipeInComponent(recipe, selectedComponent)
+                && GetCellRecipe(selected.DayIndex, selected.MealSlot, selectedComponent) is null)
+            {
+                return new CellSelection(selected.DayIndex, selected.MealSlot, selectedComponent);
+            }
+        }
+
+        var mealSlots = new List<MealSlot>();
+        if (SelectedCell is { } selectedCell)
+        {
+            mealSlots.Add(selectedCell.MealSlot);
+        }
+        else
+        {
+            mealSlots.Add(MealViewToSlot(SelectedMealView));
         }
 
         foreach (var mealSlot in VisibleMealViews.Select(MealViewToSlot))
         {
-            foreach (var dayIndex in VisibleDayIndices)
+            if (!mealSlots.Contains(mealSlot))
             {
-                if (!recipe.IsSuitableForMealSlot(mealSlot))
-                {
-                    continue;
-                }
+                mealSlots.Add(mealSlot);
+            }
+        }
 
-                foreach (var component in PreferredComponentsForRecipe(recipe))
+        foreach (var mealSlot in mealSlots.Where(recipe.IsSuitableForMealSlot))
+        {
+            var dayIndices = VisibleDayIndices.ToList();
+            if (SelectedCell is { } selectedForDay
+                && selectedForDay.MealSlot == mealSlot
+                && dayIndices.Remove(selectedForDay.DayIndex))
+            {
+                dayIndices.Insert(0, selectedForDay.DayIndex);
+            }
+
+            foreach (var dayIndex in dayIndices)
+            {
+                foreach (var componentKey in PreferredComponentsForRecipe(recipe).Select(NormalizeComponentKey))
                 {
-                    if (CurrentSchedule[dayIndex][mealSlot][component] is null)
+                    if (CurrentSchedule[dayIndex][mealSlot].ContainsKey(componentKey)
+                        && GetCellRecipe(dayIndex, mealSlot, componentKey) is null)
                     {
-                        CurrentSchedule[dayIndex][mealSlot][component] = recipe;
-                        ReopenActiveWeekAfterChange();
-                        SelectedCell = null;
-                        LastPlacedRecipe = recipe;
-                        PlannerSidebarTab = PlannerInsightsTab;
-                        PlannerMessage = null;
-                        await RefreshInsightsAsync();
-                        return;
+                        return new CellSelection(dayIndex, mealSlot, componentKey);
                     }
                 }
             }
         }
 
-        PlannerMessage = $"No open component slot found for {recipe.RecipeName}.";
+        return null;
+    }
+
+    private string AssignmentButtonLabel(RecipeDto recipe, bool shortLabel = false)
+    {
+        var target = FindPlacementTarget(recipe);
+        if (target is null)
+        {
+            return "No open slot";
+        }
+
+        var usesSelectedCell = SelectedCell is { } selected
+            && selected.DayIndex == target.Value.DayIndex
+            && selected.MealSlot == target.Value.MealSlot
+            && NormalizeComponentKey(selected.ComponentKey).Equals(target.Value.ComponentKey, StringComparison.OrdinalIgnoreCase);
+
+        if (usesSelectedCell)
+        {
+            return shortLabel ? "Add" : "Add to selected slot";
+        }
+
+        return shortLabel ? "Add next" : "Add to next open slot";
     }
 
     private async Task RemoveRecipe(int dayIndex, MealSlot mealSlot, string componentKey)
@@ -1671,6 +1769,8 @@
         SchedulesByWeek[ActiveWeek] = CreateBlankSchedule();
         ReopenActiveWeekAfterChange();
         SelectedCell = null;
+        OpenCopyItem = null;
+        LastCopyConfirmation = null;
         PlannerMessage = null;
         _ = RefreshInsightsAsync();
     }
@@ -1693,6 +1793,7 @@
 
         ReopenActiveWeekAfterChange();
         SelectedCell = null;
+        OpenCopyItem = OpenCopyItem is { } openCopy && openCopy.DayIndex == dayIndex ? null : OpenCopyItem;
         LastCopyConfirmation = null;
         PlannerMessage = $"Cleared {DateForDayIndex(dayIndex):dddd, MMM d} in Week {ActiveWeek}.";
         await RefreshInsightsAsync();
@@ -2253,6 +2354,7 @@
     }
 
     private readonly record struct CellSelection(int DayIndex, MealSlot MealSlot, string ComponentKey);
+    private readonly record struct CopyItemSelection(int DayIndex, MealSlot MealSlot, string ComponentKey, int RecipeId);
     private readonly record struct GalleryFilter(string Group, string Value);
     private readonly record struct DragSelection(RecipeDto Recipe, int? SourceDayIndex, MealSlot? SourceMealSlot, string? SourceComponentKey);
     private readonly record struct MenuPlacement(int DayIndex, MealSlot MealSlot, string ComponentKey, RecipeDto Recipe);

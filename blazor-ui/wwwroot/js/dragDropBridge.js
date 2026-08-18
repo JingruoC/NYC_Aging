@@ -15,7 +15,23 @@ function findElement(target, selector, root) {
 }
 
 function isInteractiveControl(target) {
-  return Boolean(target?.closest?.("button, input, select, textarea, a"));
+  return Boolean(target?.closest?.("button, input, select, textarea, a, summary, details, [data-dnd-no-drag='true']"));
+}
+
+function scrollPageNearViewportEdge(clientY) {
+  const edgeSize = 72;
+  const maxStep = 56;
+  let scrollStep = 0;
+
+  if (clientY < edgeSize) {
+    scrollStep = -Math.ceil(((edgeSize - clientY) / edgeSize) * maxStep);
+  } else if (clientY > window.innerHeight - edgeSize) {
+    scrollStep = Math.ceil(((clientY - (window.innerHeight - edgeSize)) / edgeSize) * maxStep);
+  }
+
+  if (scrollStep !== 0) {
+    window.scrollBy({ top: scrollStep, behavior: "auto" });
+  }
 }
 
 export function attachDragPayloads(root, dotnetRef) {
@@ -107,6 +123,7 @@ export function attachDragPayloads(root, dotnetRef) {
       return;
     }
 
+    scrollPageNearViewportEdge(event.clientY);
     const dropZone = getDropZone(event.clientX, event.clientY);
     clearHover();
     if (dropZone) {
