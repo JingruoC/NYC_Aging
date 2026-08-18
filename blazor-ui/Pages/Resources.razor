@@ -139,8 +139,8 @@
                                         @if (resource.StoredId is int storedResourceId)
                                         {
                                             <a class="secondary-button tiny-button" href="@($"/downloads/resources/{storedResourceId}?download=true")">Download</a>
+                                            <button type="button" class="secondary-button tiny-button" @onclick="() => AddResourceToPrintQueue(resource)">Queue</button>
                                         }
-                                        <button type="button" class="secondary-button tiny-button" @onclick="() => AddResourceToPrintQueue(resource)">Queue</button>
                                         @if (IsAdmin)
                                         {
                                             <button type="button" class="ghost-button tiny-button" @onclick="() => RemoveResource(resource)">Remove</button>
@@ -276,9 +276,13 @@
 
     private void AddResourceToPrintQueue(LegacyResourceItem resource)
     {
-        var resourceUrl = resource.StoredId is int resourceId
-            ? $"/downloads/resources/{resourceId}?download=false"
-            : $"/resources?file={Uri.EscapeDataString(resource.Title)}";
+        if (resource.StoredId is not int resourceId)
+        {
+            Message = $"{resource.Title} is a reference-only record. Upload its source file before adding it to the print queue.";
+            return;
+        }
+
+        var resourceUrl = $"/downloads/resources/{resourceId}?download=false";
         var added = PrintQueue.Add("Resource", resource.Title, resourceUrl, $"{resource.ResourceType} · Updated {FormatResourceDate(resource.LastUpdated)}");
         Message = added ? $"{resource.Title} added to the print queue." : $"{resource.Title} is already in the print queue.";
     }
